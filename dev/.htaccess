@@ -1,0 +1,2 @@
+# Command-line tools only. Never serve anything from this folder.
+Require all denied
