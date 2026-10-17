@@ -35,7 +35,7 @@ $rows = $st->fetchAll();
 admin_header('Fridge', 'drawings');
 ?>
 <h1>Fridge <small class="count"><?= $total ?> drawing<?= $total === 1 ? '' : 's' ?></small></h1>
-<p class="lead">Drawings land here when Ezra taps ⭐<?= settings()['auto_save'] === '1' ? ', and every time he finishes tracing a letter' : '' ?>.
+<p class="lead">Drawings land here when Ezra taps ⭐<?= settings()['auto_save'] === '1' ? ', and every time he finishes tracing a letter or number' : '' ?>.
 The newest 60 show on the fridge in the game.</p>
 
 <?php if (!$rows): ?>

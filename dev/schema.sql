@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS letters (
 
 CREATE TABLE IF NOT EXISTS drawings (
   id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  letter      CHAR(1)      NOT NULL,
-  letter_case ENUM('upper','lower') NOT NULL DEFAULT 'upper',
+  letter      VARCHAR(3)   NOT NULL,                          -- 'A'…'Z', or '0'…'100' for numbers
+  letter_case ENUM('upper','lower','number') NOT NULL DEFAULT 'upper',
   mode        ENUM('trace','draw')  NOT NULL DEFAULT 'trace',
   device_id   VARCHAR(64)  NOT NULL DEFAULT '',
   file        VARCHAR(255) NOT NULL,

@@ -67,6 +67,15 @@ foreach (array_filter(array_map('trim', explode(';', preg_replace('/^--.*$/m', '
 }
 say('✓ Tables are ready.');
 
+// 1b. Upgrades for older installs (never touches the data)
+$col = $pdo->query("SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'drawings' AND COLUMN_NAME = 'letter_case'")->fetchColumn();
+if ($col !== false && !str_contains((string)$col, 'number')) {
+    $pdo->exec("ALTER TABLE drawings
+        MODIFY letter VARCHAR(3) NOT NULL,
+        MODIFY letter_case ENUM('upper','lower','number') NOT NULL DEFAULT 'upper'");
+    say('✓ Fridge can now hold number drawings too.');
+}
+
 // 2. Letters (only adds missing ones, never overwrites your changes)
 $ins = $pdo->prepare('INSERT IGNORE INTO letters (letter, word, emoji) VALUES (?, ?, ?)');
 $added = 0;
