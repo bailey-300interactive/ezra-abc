@@ -74,7 +74,8 @@ the words and pictures, record your own voice, and see the drawings Ezra saves t
 
 ### Updating an existing install
 After pulling a new version, run `php dev/install.php` again. It upgrades the database where needed
-(for example, the numbers update widens the `drawings` table so numbers can go on the fridge) and
+(for example, the numbers update widens the `drawings` table so numbers can go on the fridge, adds the
+`numbers` table and a Hooray clip column on `letters`) and
 never touches your letters, settings or drawings.
 
 Requires PHP 8.1+ with the pdo_mysql, fileinfo and gd extensions, and MySQL 5.7+ or MariaDB 10.3+.
@@ -84,15 +85,21 @@ in the browser.
 ## Admin panel
 | Page | What it does |
 |---|---|
-| Letters | For each letter: the word, emoji, your own picture (shown in a circle; try **E is for Ezra** with his photo), a voice clip (🎙️ record right in the browser or upload an MP3/M4A/WAV), and an on/off switch to hide letters he isn't ready for |
+| Letters | For each letter: the word, emoji, your own picture (shown in a circle; try **E is for Ezra** with his photo), a voice clip (🎙️ record right in the browser or upload an MP3/M4A/WAV), a 🎉 Hooray clip, and an on/off switch to hide letters he isn't ready for |
+| Numbers | For each number: a voice clip (“Three! Three cars!”) and a 🎉 Hooray clip, recorded or uploaded the same way as letters |
 | Fridge | Every saved drawing, newest first, with download and remove |
-| Settings | Game title, numbers on/off and how high to count (10, 20, 50 or 100), start with ABC or abc, start in trace or draw, tracing difficulty, sound effects, voice on/off and talking speed, fridge on/off, auto-save finished tracings, change password |
+| Settings | Game title, numbers on/off and how high to count (10, 20, 50 or 100), start with ABC or abc, start in trace or draw, tracing difficulty, sound effects, voice on/off, **Voice** (pick the voice with ▶ Hear it, pitch, talking speed, and your own “Hooray! You did it!” clip for everything), fridge on/off, auto-save finished tracings, change password |
 
-**Voice:** without a clip, the iPad's built-in voice says “Ay! Ay is for Apple!”. The game picks the
-most natural-sounding voice the device has (Premium / Enhanced voices first, never the novelty ones)
-at a natural pitch. For the nicest voice, on the iPad open Settings → Accessibility → Spoken Content →
-Voices → English and download **Ava (Premium)** or **Zoe (Premium)**. With a clip, your
-recording plays instead. Record on the iPad or iPhone itself if you can: Safari records M4A, which
+**Voice:** without a clip, the iPad's built-in voice says “Ay! Ay is for Apple!” or “Three! Three cars!”.
+Pick it under Settings → **Voice**. Voices come from the device, so open the admin **on Ezra's iPad** to
+see the iPad's voices; ▶ Hear it and ⏭ Try the next voice preview them with the pitch and speed you set.
+Automatic picks the most natural one (Premium / Enhanced first, never the novelty voices). For the nicest
+voices, on the iPad open Settings → Accessibility → Spoken Content → Voices → English and download
+**Ava (Premium)** or **Zoe (Premium)**. A device that doesn't have the chosen voice uses Automatic.
+
+With a clip, your recording plays instead. When he finishes tracing, the game plays the letter's or
+number's own 🎉 Hooray clip, else the Hooray clip from Settings, else the voice says “Hooray! You did
+it!”, and then says the letter or number (your clip if there is one). Record on the iPad or iPhone itself if you can: Safari records M4A, which
 every device plays. Chrome on a computer records WebM, which plays on recent iPads (iPadOS 17+).
 
 ## What's hidden from the web
@@ -119,7 +126,7 @@ All made from Ezra's photo: his face in a gold ring on the game's purple-to-blue
 index.php            the game (splash, letter and number grids, trace/draw board, fridge)
 manifest.php         Add to Home Screen / full-screen settings
 api/drawings.php     saves drawings and lists them for the fridge
-admin/               admin panel (letters, fridge, settings, login)
+admin/               admin panel (letters, numbers, fridge, settings, login)
 inc/                 shared PHP (blocked from the web)
 assets/js/letters.js the stroke shapes for A–Z, a–z and the digits 0–9, number words and things to count
 assets/js/game.js    the game

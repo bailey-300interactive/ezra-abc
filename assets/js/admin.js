@@ -1,10 +1,11 @@
-/* Ezra ABC admin: record a voice clip for a letter right in the browser. */
+/* Ezra ABC admin: record a voice clip right in the browser (letters, numbers and the "Hooray!" clips).
+   Each 🎙️ button says where to send it: data-post (page), data-fields (JSON form fields), data-title,
+   data-say (what to say) and data-back (the #anchor to come back to). */
 (() => {
   const dlg = document.getElementById('recDialog');
   if (!dlg) return;
   const $ = id => document.getElementById(id);
-  const NAMES = { A: 'Ay', B: 'Bee', C: 'See', D: 'Dee', E: 'Ee', F: 'Eff', G: 'Gee', H: 'Aitch', I: 'Eye', J: 'Jay', K: 'Kay', L: 'El', M: 'Em', N: 'En', O: 'Oh', P: 'Pee', Q: 'Cue', R: 'Ar', S: 'Ess', T: 'Tee', U: 'You', V: 'Vee', W: 'Double-you', X: 'Ex', Y: 'Why', Z: 'Zee' };
-  let rec = null, stream = null, chunks = [], blob = null, letter = '', t0 = 0, timer = 0, ac = null, raf = 0;
+  let rec = null, stream = null, chunks = [], blob = null, target = null, t0 = 0, timer = 0, ac = null, raf = 0;
 
   function pickType() {
     const types = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'];
@@ -59,10 +60,9 @@
 
   document.querySelectorAll('.rec').forEach(b => b.addEventListener('click', () => {
     if (!window.MediaRecorder) { alert('This browser can\'t record. Use "Upload clip" instead.'); return; }
-    letter = b.dataset.letter;
-    $('recLetter').textContent = letter;
-    const w = (window.LETTER_WORDS || {})[letter];
-    $('recSay').textContent = `${NAMES[letter]}! ${letter} is for ${w || '…'}!`;
+    target = { post: b.dataset.post, fields: JSON.parse(b.dataset.fields || '{}'), back: b.dataset.back || '', name: b.dataset.name || 'clip' };
+    $('recLetter').textContent = b.dataset.title || '';
+    $('recSay').textContent = b.dataset.say || '';
     $('recTime').textContent = '0.0 s';
     dlg.showModal(); start();
   }));
@@ -73,14 +73,16 @@
     if (!blob) return;
     const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm';
     const fd = new FormData();
-    fd.append('csrf', window.CSRF); fd.append('letter', letter); fd.append('action', 'voice'); fd.append('ajax', '1');
-    fd.append('voice', blob, `${letter}.${ext}`);
+    fd.append('csrf', window.CSRF); fd.append('ajax', '1');
+    Object.entries(target.fields).forEach(([k, v]) => fd.append(k, v));
+    fd.append('clip', blob, `${target.name}.${ext}`);
     $('recSave').disabled = true;
     try {
-      const r = await fetch('letters.php', { method: 'POST', body: fd });
+      const r = await fetch(target.post, { method: 'POST', body: fd });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'Upload failed');
-      location.hash = 'L-' + letter; location.reload();
+      if (target.back) location.hash = target.back;
+      location.reload();
     } catch (e) { alert(e.message); }
     $('recSave').disabled = false;
   });

@@ -23,7 +23,8 @@
   const NUMWORD = window.ABC_NUMBER_WORD;
   const THINGS = window.ABC_NUMBER_THINGS;
   const NUM_MAX = [10, 20, 50, 100].includes(B.numberMax) ? B.numberMax : 100;
-  const NUMBERS = Array.from({ length: NUM_MAX + 1 }, (_, n) => ({ num: n }));
+  const CLIPS = B.numberClips || {};
+  const NUMBERS = Array.from({ length: NUM_MAX + 1 }, (_, n) => ({ num: n, voice: (CLIPS[n] || {}).voice || null, cheer: (CLIPS[n] || {}).cheer || null }));
   // Number groups on the home screen: 0–10, 11–20, 21–30 …
   const GROUPS = [{ from: 0, to: Math.min(10, NUM_MAX) }];
   for (let a = 11; a <= NUM_MAX; a += 10) GROUPS.push({ from: a, to: Math.min(a + 9, NUM_MAX) });
@@ -117,7 +118,10 @@
   }
   function pickVoice() {
     if (!('speechSynthesis' in window)) return;
-    const vs = speechSynthesis.getVoices().filter(v => /^en(-|_|$)/i.test(v.lang) && !NOVELTY.test(v.name));
+    const all = speechSynthesis.getVoices();
+    // the voice picked in the admin's Settings, if this device has it
+    if (B.voiceName) { const chosen = all.find(v => v.name === B.voiceName); if (chosen) { voice = chosen; return; } }
+    const vs = all.filter(v => /^en(-|_|$)/i.test(v.lang) && !NOVELTY.test(v.name));
     voice = vs.sort((a, b) => voiceScore(b) - voiceScore(a))[0] || null;
   }
   if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.addEventListener?.('voiceschanged', pickVoice); }
@@ -129,15 +133,24 @@
     if (!B.voice || !('speechSynthesis' in window)) { then && then(); return; }
     const u = new SpeechSynthesisUtterance(text);
     // A natural pitch: pushing it up is what made the old voice sound strange.
-    u.rate = B.rate; u.pitch = 1.05; u.volume = 1;
+    u.rate = B.rate; u.pitch = B.pitch || 1.05; u.volume = 1;
     if (voice) u.voice = voice;
     if (then) u.onend = then;
     speechSynthesis.speak(u);
   }
-  function playClip(url) {
-    if (!B.voice || !url) return false;
-    clipEl = new Audio(url); clipEl.play().catch(() => {});
+  function playClip(url, then) {
+    if (!B.voice || !url) { then && then(); return false; }
+    const el = clipEl = new Audio(url);
+    let done = false;
+    const next = () => { if (!done && clipEl === el) { done = true; then && then(); } };
+    if (then) { el.onended = next; el.onerror = next; }
+    el.play().catch(() => next());
     return true;
+  }
+  /* "Hooray! You did it!": the letter's or number's own recording, else the one from Settings, else the voice. */
+  function cheer(item, then) {
+    const url = item.cheer || B.cheer;
+    if (url && B.voice) playClip(url, then); else say('Hooray! You did it!', then);
   }
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
   const isNum = it => it && it.num !== undefined;
@@ -148,7 +161,11 @@
   function speakLetter(intro = '') {
     stopTalking();
     const L = cur();
-    if (isNum(L)) { say(`${intro}${cap(NUMWORD(L.num))}! ${numPhrase(L.num)}`); return; }
+    if (isNum(L)) {
+      if (L.voice && !intro) { playClip(L.voice); return; }
+      say(`${intro}${cap(NUMWORD(L.num))}! ${numPhrase(L.num)}`, intro && L.voice ? () => playClip(L.voice) : null);
+      return;
+    }
     const name = NAMES[L.letter];
     const tail = L.word ? `${name} is for ${L.word}!` : '';
     if (L.voice && !intro) { playClip(L.voice); return; }
@@ -611,10 +628,10 @@
     party.style.pointerEvents = 'none';                 // a finger still drawing can't close it right away
     setTimeout(() => { party.style.pointerEvents = ''; }, 1400);
     stopTalking();
-    if (num) { say(`Hooray! You did it! ${cap(NUMWORD(L.num))}! ${numPhrase(L.num)}`); }
+    if (num) cheer(L, () => { if (L.voice) playClip(L.voice); else say(`${cap(NUMWORD(L.num))}! ${numPhrase(L.num)}`); });
     else {
-    const name = NAMES[L.letter];
-    say(`Hooray! You did it! ${name}!`, () => { if (L.voice) playClip(L.voice); else if (L.word) say(`${name} is for ${L.word}!`); });
+      const name = NAMES[L.letter];
+      cheer(L, () => { if (L.voice) playClip(L.voice); else say(L.word ? `${name}! ${name} is for ${L.word}!` : `${name}!`); });
     }
     if (B.autoSave) saveDrawing(true);
     clearTimeout(celebrate.t);
@@ -870,7 +887,9 @@
       if (run !== countRun) return;
       sfx.chime();
       const r = big.getBoundingClientRect(); burst(r.left + r.width / 2, r.top + r.height / 2, 14, 'star');
-      if (n <= 20) say(n === 0 ? `Zero! ${numPhrase(0)}` : numPhrase(n));
+      const it = cur();
+      if (it.voice) playClip(it.voice);                         // your recording of "Three! Three cars!"
+      else if (n <= 20) say(n === 0 ? `Zero! ${numPhrase(0)}` : numPhrase(n));
       setTimeout(() => { if (run === countRun) stopCount(); }, n <= 20 ? 3200 : 2400);
     };
     let i = 0;

@@ -50,6 +50,9 @@ function default_settings(): array
         'auto_save'      => '1',       // save a finished tracing to the fridge automatically
         'numbers_on'     => '1',       // show the ABC / 123 switch so he can trace numbers too
         'number_max'     => '100',     // count up to 10 | 20 | 50 | 100
+        'voice_name'     => '',        // a voice picked in Settings ('' = pick the most natural one on the device)
+        'voice_pitch'    => '1.05',
+        'cheer_clip'     => '',        // your own "Hooray! You did it!" recording, used when a letter/number has none
     ];
 }
 
@@ -89,11 +92,50 @@ function default_letters(): array
 
 function letters(bool $onlyEnabled = false): array
 {
-    $rows = db()->query('SELECT letter, word, emoji, image, voice, enabled, UNIX_TIMESTAMP(updated_at) AS ver FROM letters ORDER BY letter')->fetchAll();
+    // SELECT * so a server that hasn't run the installer's upgrade yet (no cheer column) still works
+    $rows = db()->query('SELECT *, UNIX_TIMESTAMP(updated_at) AS ver FROM letters ORDER BY letter')->fetchAll();
     if ($onlyEnabled) {
         $rows = array_values(array_filter($rows, fn($r) => (int)$r['enabled'] === 1));
     }
     return $rows;
+}
+
+/** Saved voice clips for numbers, keyed by number: [n => ['voice' =>, 'cheer' =>, 'ver' =>]]. */
+function number_clips(): array
+{
+    try {
+        $rows = db()->query('SELECT num, voice, cheer, UNIX_TIMESTAMP(updated_at) AS ver FROM numbers ORDER BY num')->fetchAll();
+    } catch (Throwable $e) {
+        return [];                                   // table not there until `php dev/install.php` is run
+    }
+    $out = [];
+    foreach ($rows as $r) $out[(int)$r['num']] = $r;
+    return $out;
+}
+
+/** Same words and things to count as assets/js/letters.js, for the admin's "say this" prompts. */
+function number_word(int $n): string
+{
+    $ones = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
+        'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+    $tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+    if ($n >= 100) return 'one hundred';
+    if ($n < 20) return $ones[$n];
+    return $tens[intdiv($n, 10)] . ($n % 10 ? '-' . $ones[$n % 10] : '');
+}
+function number_thing(int $n): array
+{
+    $t = [['🍪', 'cookie', 'cookies'], ['🐶', 'puppy', 'puppies'], ['👟', 'shoe', 'shoes'], ['🚗', 'car', 'cars'],
+        ['🍎', 'apple', 'apples'], ['⭐', 'star', 'stars'], ['🦆', 'duck', 'ducks'], ['🐟', 'fish', 'fish'],
+        ['🍓', 'strawberry', 'strawberries'], ['🐞', 'ladybug', 'ladybugs']][$n % 10];
+    return [$t[0], $n === 1 ? $t[1] : $t[2]];
+}
+/** "Three! Three cars!" */
+function number_phrase(int $n): string
+{
+    [, $noun] = number_thing($n);
+    $w = ucfirst(number_word($n));
+    return $n === 0 ? "Zero! No $noun!" : "$w! $w $noun!";
 }
 
 function h(?string $s): string
