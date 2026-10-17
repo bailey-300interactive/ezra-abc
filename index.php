@@ -9,7 +9,12 @@ $letters = array_map(fn($r) => [
     'emoji'  => $r['emoji'],
     'image'  => upload_url($r['image'], $r['ver']),
     'voice'  => upload_url($r['voice'], $r['ver']),
+    'cheer'  => upload_url($r['cheer'] ?? null, $r['ver']),
 ], letters(true));
+$numberClips = [];
+foreach (number_clips() as $n => $c) {
+    if ($c['voice'] || $c['cheer']) $numberClips[$n] = ['voice' => upload_url($c['voice'], $c['ver']), 'cheer' => upload_url($c['cheer'], $c['ver'])];
+}
 
 $boot = [
     'title'       => $S['title'],
@@ -19,6 +24,10 @@ $boot = [
     'voice'       => $S['voice_on'] === '1',
     'sounds'      => $S['sounds_on'] === '1',
     'rate'        => max(0.5, min(1.3, (float)$S['speech_rate'])),
+    'pitch'       => max(0.7, min(1.5, (float)$S['voice_pitch'])),
+    'voiceName'   => $S['voice_name'],
+    'cheer'       => upload_url($S['cheer_clip'] ?: null, @filemtime(__DIR__ . '/' . $S['cheer_clip']) ?: null),
+    'numberClips' => (object)$numberClips,
     'difficulty'  => $S['difficulty'] === 'medium' ? 'medium' : 'easy',
     'fridge'      => $S['show_fridge'] === '1',
     'autoSave'    => $S['auto_save'] === '1',
