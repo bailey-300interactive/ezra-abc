@@ -15,36 +15,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$row) throw new RuntimeException('Unknown letter.');
         $action = (string)($_POST['action'] ?? 'save');
 
+        $voice = handle_clip_action($action, $row['voice'], $L, 'voice');
+        $cheer = handle_clip_action($action, $row['cheer'] ?? null, $L, 'cheer');
+
         if ($action === 'save') {
             $word  = mb_substr(trim((string)($_POST['word'] ?? '')), 0, 40);
             $emoji = mb_substr(trim((string)($_POST['emoji'] ?? '')), 0, 8);
             $on    = !empty($_POST['enabled']) ? 1 : 0;
             $image = $row['image'];
-            $voice = $row['voice'];
             if (!empty($_FILES['image']['name'])) {
                 $new = save_letter_picture($_FILES['image'], $L);
                 delete_upload($image); $image = $new;
             }
-            if (!empty($_FILES['voice']['name'])) {
-                $new = save_letter_voice($_FILES['voice'], $L);
-                delete_upload($voice); $voice = $new;
-            }
-            db()->prepare('UPDATE letters SET word = ?, emoji = ?, enabled = ?, image = ?, voice = ? WHERE letter = ?')
-                ->execute([$word, $emoji, $on, $image, $voice, $L]);
+            db()->prepare('UPDATE letters SET word = ?, emoji = ?, enabled = ?, image = ?, voice = ?, cheer = ? WHERE letter = ?')
+                ->execute([$word, $emoji, $on, $image, $voice, $cheer, $L]);
             flash("Saved $L.");
-        } elseif ($action === 'voice') {                       // recorded in the browser
-            $new = save_letter_voice($_FILES['voice'] ?? [], $L);
-            delete_upload($row['voice']);
-            db()->prepare('UPDATE letters SET voice = ? WHERE letter = ?')->execute([$new, $L]);
-            flash("Saved your recording for $L.");
+        } elseif (in_array($action, ['rec_voice', 'remove_voice', 'rec_cheer', 'remove_cheer'], true)) {
+            db()->prepare('UPDATE letters SET voice = ?, cheer = ? WHERE letter = ?')->execute([$voice, $cheer, $L]);
+            flash(match ($action) {
+                'rec_voice'    => "Saved your recording for $L.",
+                'rec_cheer'    => "Saved your Hooray clip for $L.",
+                'remove_voice' => "Removed the voice clip for $L. The iPad's voice will read it instead.",
+                'remove_cheer' => "Removed the Hooray clip for $L.",
+            });
         } elseif ($action === 'remove_image') {
             delete_upload($row['image']);
             db()->prepare('UPDATE letters SET image = NULL WHERE letter = ?')->execute([$L]);
             flash("Removed the picture for $L. It shows the emoji again.");
-        } elseif ($action === 'remove_voice') {
-            delete_upload($row['voice']);
-            db()->prepare('UPDATE letters SET voice = NULL WHERE letter = ?')->execute([$L]);
-            flash("Removed the voice clip for $L. The iPad's voice will read it instead.");
         } elseif ($action === 'reset') {
             [$w, $e] = default_letters()[$L];
             db()->prepare('UPDATE letters SET word = ?, emoji = ? WHERE letter = ?')->execute([$w, $e, $L]);
@@ -60,11 +57,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $rows = letters();
+$S = settings();
+$NAMES = ['A' => 'Ay', 'B' => 'Bee', 'C' => 'See', 'D' => 'Dee', 'E' => 'Ee', 'F' => 'Eff', 'G' => 'Gee', 'H' => 'Aitch', 'I' => 'Eye',
+    'J' => 'Jay', 'K' => 'Kay', 'L' => 'El', 'M' => 'Em', 'N' => 'En', 'O' => 'Oh', 'P' => 'Pee', 'Q' => 'Cue', 'R' => 'Ar', 'S' => 'Ess',
+    'T' => 'Tee', 'U' => 'You', 'V' => 'Vee', 'W' => 'Double-you', 'X' => 'Ex', 'Y' => 'Why', 'Z' => 'Zee'];
 admin_header('Letters', 'letters');
 ?>
 <h1>Letters</h1>
 <p class="lead">Each letter shows a word and a picture when Ezra opens it, and says “<b>A</b> is for <b>Apple</b>!” out loud.
-Change the word, use your own photo (try <b>E is for Ezra</b>), or record your own voice. Turn a letter off to hide it from the game.</p>
+Change the word, use your own photo (try <b>E is for Ezra</b>), or record your own voice. The 🎉 Hooray clip replaces
+“Hooray! You did it!” when he finishes tracing it. Turn a letter off to hide it from the game.</p>
 
 <div class="letters">
 <?php foreach ($rows as $r): $L = $r['letter']; $ver = $r['ver']; ?>
@@ -88,18 +90,9 @@ Change the word, use your own photo (try <b>E is for Ezra</b>), or record your o
     <?php if ($r['image']): ?>
       <button class="link danger" name="action" value="remove_image" formnovalidate>Remove picture</button>
     <?php endif; ?>
-    <div class="voice">
-      <?php if ($r['voice']): ?>
-        <audio controls preload="none" src="../<?= h($r['voice']) ?>?v=<?= h((string)$ver) ?>"></audio>
-        <button class="link danger" name="action" value="remove_voice" formnovalidate>Remove voice</button>
-      <?php else: ?>
-        <span class="hint">🗣️ Using the iPad's voice</span>
-      <?php endif; ?>
-      <div class="voice-actions">
-        <button type="button" class="btn small rec" data-letter="<?= h($L) ?>">🎙️ Record</button>
-        <label class="file small">⬆️ Upload clip <input type="file" name="voice" accept="audio/*"></label>
-      </div>
-    </div>
+    <?php $say = $NAMES[$L] . "! $L is for " . ($r['word'] ?: '…') . '!'; ?>
+    <?= clip_box('voice', $r['voice'], $ver, 'letters.php', ['letter' => $L], $L, $say, 'L-' . $L, "Using the iPad's voice") ?>
+    <?= clip_box('cheer', $r['cheer'] ?? null, $ver, 'letters.php', ['letter' => $L], "$L: Hooray", 'Hooray! You did it!', 'L-' . $L, $S['cheer_clip'] ? 'Using your Hooray clip from Settings' : "Using the iPad's voice") ?>
     <div class="actions">
       <button class="btn primary" name="action" value="save">Save</button>
       <button class="link" name="action" value="reset" formnovalidate title="Back to the original word and emoji">Reset</button>
@@ -108,18 +101,5 @@ Change the word, use your own photo (try <b>E is for Ezra</b>), or record your o
 <?php endforeach; ?>
 </div>
 
-<dialog id="recDialog" class="card">
-  <h2>🎙️ Record <span id="recLetter"></span></h2>
-  <p>Say something like “<b id="recSay"></b>”. Tap stop when you're done.</p>
-  <div class="rec-meter"><span id="recLevel"></span></div>
-  <p class="rec-time" id="recTime">0.0 s</p>
-  <audio id="recPreview" controls hidden></audio>
-  <div class="actions">
-    <button type="button" class="btn" id="recCancel">Cancel</button>
-    <button type="button" class="btn danger" id="recStop">⏹ Stop</button>
-    <button type="button" class="btn" id="recAgain" hidden>Again</button>
-    <button type="button" class="btn primary" id="recSave" hidden>Save</button>
-  </div>
-</dialog>
-<script>window.LETTER_WORDS = <?= json_encode(array_column($rows, 'word', 'letter'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;</script>
+<?= recorder_dialog() ?>
 <?php admin_footer();

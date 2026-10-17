@@ -75,6 +75,11 @@ if ($col !== false && !str_contains((string)$col, 'number')) {
         MODIFY letter_case ENUM('upper','lower','number') NOT NULL DEFAULT 'upper'");
     say('✓ Fridge can now hold number drawings too.');
 }
+$has = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'letters' AND COLUMN_NAME = 'cheer'")->fetchColumn();
+if (!(int)$has) {
+    $pdo->exec('ALTER TABLE letters ADD COLUMN cheer VARCHAR(255) NULL AFTER voice');
+    say('✓ Letters can now have their own "Hooray!" recording.');
+}
 
 // 2. Letters (only adds missing ones, never overwrites your changes)
 $ins = $pdo->prepare('INSERT IGNORE INTO letters (letter, word, emoji) VALUES (?, ?, ?)');

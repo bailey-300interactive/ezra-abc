@@ -7,6 +7,7 @@ function admin_header(string $title, string $active = ''): void
     $S = settings();
     $nav = [
         'letters'  => ['letters.php', '🔤 Letters'],
+        'numbers'  => ['numbers.php', '🔢 Numbers'],
         'drawings' => ['drawings.php', '🧲 Fridge'],
         'settings' => ['settings.php', '⚙️ Settings'],
     ];
@@ -85,8 +86,8 @@ function save_letter_picture(array $file, string $letter): string
     return 'uploads/letters/' . $name;
 }
 
-/** Save an uploaded or recorded voice clip. Returns the relative path. */
-function save_letter_voice(array $file, string $letter): string
+/** Save an uploaded or recorded voice clip ($kind: 'voice' or 'cheer'). Returns the relative path. */
+function save_letter_voice(array $file, string $letter, string $kind = 'voice'): string
 {
     if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) throw new RuntimeException(upload_error_text($file['error'] ?? 4));
     if ($file['size'] > 10 * 1024 * 1024) throw new RuntimeException('Voice clips can be up to 10 MB.');
@@ -97,7 +98,8 @@ function save_letter_voice(array $file, string $letter): string
         'video/mp4' => 'm4a', 'video/webm' => 'webm', 'application/ogg' => 'ogg',
     ][$mime] ?? null;
     if (!$ext) throw new RuntimeException('That sound type isn\'t supported (' . $mime . '). Use MP3, M4A, WAV or record one here.');
-    $name = $letter . '-voice-' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $kind = $kind === 'cheer' ? 'cheer' : 'voice';
+    $name = $letter . '-' . $kind . '-' . bin2hex(random_bytes(4)) . '.' . $ext;
     if (!move_uploaded_file($file['tmp_name'], UPLOAD_DIR . '/letters/' . $name)) {
         throw new RuntimeException('Could not save the clip. Is the uploads folder writable?');
     }
@@ -120,4 +122,72 @@ function upload_error_text(int $code): string
         UPLOAD_ERR_NO_FILE => 'No file was chosen.',
         default => 'The upload failed (error ' . $code . ').',
     };
+}
+
+/**
+ * One voice-clip box: the clip with a player and Remove, or a note that the iPad's voice is used,
+ * then 🎙️ Record (in the browser) and ⬆️ Upload. $kind is 'voice' (says the letter/number) or
+ * 'cheer' (replaces “Hooray! You did it!”). Posts to $post with $fields plus action rec_<kind>
+ * (recorded, file field "clip"), remove_<kind>, or a file field named <kind> with action save.
+ */
+function clip_box(string $kind, ?string $path, $ver, string $post, array $fields, string $title, string $say, string $back, string $fallback): string
+{
+    $label = $kind === 'cheer' ? '🎉 Hooray clip' : '🗣️ Voice';
+    ob_start(); ?>
+    <div class="voice <?= h($kind) ?>">
+      <div class="voice-label"><?= $label ?></div>
+      <?php if ($path): ?>
+        <audio controls preload="none" src="../<?= h($path) ?>?v=<?= h((string)$ver) ?>"></audio>
+        <button class="link danger" name="action" value="remove_<?= h($kind) ?>" formnovalidate>Remove</button>
+      <?php else: ?>
+        <span class="hint"><?= h($fallback) ?></span>
+      <?php endif; ?>
+      <div class="voice-actions">
+        <button type="button" class="btn small rec" data-post="<?= h($post) ?>"
+          data-fields="<?= h(json_encode($fields + ['action' => 'rec_' . $kind])) ?>"
+          data-title="<?= h($title) ?>" data-say="<?= h($say) ?>" data-back="<?= h($back) ?>" data-name="<?= h($kind) ?>">🎙️ Record</button>
+        <label class="file small">⬆️ Upload <input type="file" name="<?= h($kind) ?>" accept="audio/*"></label>
+      </div>
+    </div>
+    <?php return (string)ob_get_clean();
+}
+
+/** The recorder pop-up used by every 🎙️ Record button. */
+function recorder_dialog(): string
+{
+    return <<<'HTML'
+<dialog id="recDialog" class="card">
+  <h2>🎙️ Record <span id="recLetter"></span></h2>
+  <p>Say something like “<b id="recSay"></b>”. Tap stop when you're done.</p>
+  <div class="rec-meter"><span id="recLevel"></span></div>
+  <p class="rec-time" id="recTime">0.0 s</p>
+  <audio id="recPreview" controls hidden></audio>
+  <div class="actions">
+    <button type="button" class="btn" id="recCancel">Cancel</button>
+    <button type="button" class="btn danger" id="recStop">⏹ Stop</button>
+    <button type="button" class="btn" id="recAgain" hidden>Again</button>
+    <button type="button" class="btn primary" id="recSave" hidden>Save</button>
+  </div>
+</dialog>
+HTML;
+}
+
+/** Saves, records or removes a 'voice' / 'cheer' clip for one row. Returns the new path (or the old one). */
+function handle_clip_action(string $action, ?string $current, string $prefix, string $kind): ?string
+{
+    if ($action === 'rec_' . $kind) {
+        $new = save_letter_voice($_FILES['clip'] ?? [], $prefix, $kind);
+        delete_upload($current);
+        return $new;
+    }
+    if ($action === 'remove_' . $kind) {
+        delete_upload($current);
+        return null;
+    }
+    if ($action === 'save' && !empty($_FILES[$kind]['name'])) {
+        $new = save_letter_voice($_FILES[$kind], $prefix, $kind);
+        delete_upload($current);
+        return $new;
+    }
+    return $current;
 }

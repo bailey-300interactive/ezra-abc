@@ -18,7 +18,15 @@ CREATE TABLE IF NOT EXISTS letters (
   emoji      VARCHAR(16)  NOT NULL DEFAULT '',
   image      VARCHAR(255) NULL,
   voice      VARCHAR(255) NULL,
+  cheer      VARCHAR(255) NULL,                              -- your own "Hooray! You did it!" for this letter
   enabled    TINYINT(1)   NOT NULL DEFAULT 1,
+  updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS numbers (
+  num        TINYINT UNSIGNED NOT NULL PRIMARY KEY,           -- 0 … 100
+  voice      VARCHAR(255) NULL,                               -- "Three! Three cars!" in your voice
+  cheer      VARCHAR(255) NULL,                               -- your own "Hooray! You did it!" for this number
   updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
