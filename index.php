@@ -22,6 +22,8 @@ $boot = [
     'difficulty'  => $S['difficulty'] === 'medium' ? 'medium' : 'easy',
     'fridge'      => $S['show_fridge'] === '1',
     'autoSave'    => $S['auto_save'] === '1',
+    'numbers'     => $S['numbers_on'] === '1',
+    'numberMax'   => in_array((int)$S['number_max'], [10, 20, 50, 100], true) ? (int)$S['number_max'] : 100,
     'letters'     => $letters,
 ];
 $v = (string)@filemtime(__DIR__ . '/assets/js/game.js') . (string)@filemtime(__DIR__ . '/assets/css/game.css');
@@ -62,12 +64,17 @@ header('Cache-Control: no-cache');
     <p class="hint">Tap to play</p>
   </section>
 
-  <!-- Home: pick a letter -->
+  <!-- Home: pick a letter (or a number) -->
   <section id="home" class="screen">
     <header class="home-bar">
       <div class="home-brand"><img class="home-logo" src="assets/icons/logo-ezra.png" alt=""><h1 class="bubble-title small" id="homeTitle"></h1></div>
       <div class="bar-buttons">
-        <button id="caseBtnHome" class="pill-btn case-btn" aria-label="Big or little letters">ABC</button>
+        <button id="groupBack" class="round-btn back-btn hidden" aria-label="All the numbers">⬅</button>
+        <div id="setSwitch" class="set-switch hidden" role="group" aria-label="Letters or numbers">
+          <button data-set="abc" class="set-btn" aria-label="Letters">ABC</button>
+          <button data-set="123" class="set-btn" aria-label="Numbers">123</button>
+        </div>
+        <button id="caseBtnHome" class="pill-btn case-btn" aria-label="Big or little letters">Aa</button>
         <button id="fridgeBtnHome" class="round-btn fridge-btn" aria-label="Fridge">🧲</button>
         <button class="round-btn fs-btn" aria-label="Full screen">⛶</button>
       </div>
@@ -97,6 +104,12 @@ header('Cache-Control: no-cache');
         <button class="round-btn fs-btn" aria-label="Full screen">⛶</button>
       </div>
     </header>
+
+    <!-- Counting: tap the number card -->
+    <div id="countBox" class="count-box" aria-live="polite">
+      <div id="countStage" class="count-stage"></div>
+      <div id="countSay" class="count-say"></div>
+    </div>
 
     <button id="prevBtn" class="arrow-btn prev" aria-label="Previous letter">◀</button>
     <button id="nextBtn" class="arrow-btn next" aria-label="Next letter">▶</button>

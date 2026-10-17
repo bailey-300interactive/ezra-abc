@@ -20,6 +20,14 @@
   if (!deviceId) { deviceId = Math.random().toString(36).slice(2) + Date.now().toString(36); store.set('device', deviceId); }
 
   const LETTERS = B.letters.length ? B.letters : Object.keys(NAMES).map(L => ({ letter: L, word: '', emoji: '' }));
+  const NUMWORD = window.ABC_NUMBER_WORD;
+  const THINGS = window.ABC_NUMBER_THINGS;
+  const NUM_MAX = [10, 20, 50, 100].includes(B.numberMax) ? B.numberMax : 100;
+  const NUMBERS = Array.from({ length: NUM_MAX + 1 }, (_, n) => ({ num: n }));
+  // Number groups on the home screen: 0–10, 11–20, 21–30 …
+  const GROUPS = [{ from: 0, to: Math.min(10, NUM_MAX) }];
+  for (let a = 11; a <= NUM_MAX; a += 10) GROUPS.push({ from: a, to: Math.min(a + 9, NUM_MAX) });
+  const groupOf = n => GROUPS.findIndex(g => n >= g.from && n <= g.to);
   const TILE_COLORS = ['#ff4d6d', '#ff9f1c', '#ffc43d', '#35d07f', '#1fb8e8', '#5b3df5', '#c04dff', '#ff5ca8'];
   const LETTER_COLORS = ['#ff3b5c', '#ff8a1c', '#f5b700', '#22c06b', '#169fe0', '#5b3df5', '#b03df5', '#ff4fa3'];
   const SWATCHES = [
@@ -34,9 +42,12 @@
     mode: store.get('mode', B.mode),
     idx: 0,
     brush: store.get('brush', 'rainbow'),
-    stars: store.get('stars', {})
+    stars: store.get('stars', {}),
+    set: B.numbers ? store.get('set', 'abc') : 'abc',      // 'abc' letters or '123' numbers
+    group: GROUPS.length > 1 ? -1 : 0                         // which number group is open (-1 = pick a group)
   };
   if (!B.allowCase) S.case = B.case;
+  if (S.set !== '123') S.set = 'abc';
 
   /* ---------- Sound (synthesised, nothing to download) ---------- */
   let ac = null;
@@ -88,11 +99,26 @@
 
   /* ---------- Speech (uses the iPad's built-in voice, or your recorded clip) ---------- */
   let voice = null, clipEl = null;
+  /* Pick the warmest-sounding voice the device has. The high-quality "Premium" / "Enhanced" / "Natural"
+     voices sound like a real person; the basic compact ones sound robotic, so they come last. Novelty
+     voices (Bells, Zarvox, Whisper…) are never used. */
+  const WARM = ['Ava', 'Zoe', 'Samantha', 'Nicky', 'Allison', 'Susan', 'Joelle', 'Evan', 'Nathan', 'Tom',
+    'Serena', 'Kate', 'Karen', 'Moira', 'Tessa', 'Jenny', 'Aria', 'Emma', 'Ana', 'Libby', 'Sonia', 'Google US English'];
+  const NOVELTY = /albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|good news|hysterical|jester|junior|organ|superstar|trinoids|whisper|wobble|zarvox|ralph|fred|kathy|princess|eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley/i;
+  function voiceScore(v) {
+    let s = 0;
+    if (/premium/i.test(v.name)) s += 60;
+    else if (/enhanced|neural|natural|online/i.test(v.name)) s += 45;
+    const w = WARM.findIndex(n => v.name.includes(n));
+    if (w >= 0) s += 30 - w;
+    if (/en[-_]US/i.test(v.lang)) s += 6; else if (/en[-_](GB|AU|IE|CA)/i.test(v.lang)) s += 3;
+    if (v.localService) s += 2;                     // works without the internet
+    return s;
+  }
   function pickVoice() {
     if (!('speechSynthesis' in window)) return;
-    const vs = speechSynthesis.getVoices().filter(v => /^en(-|_|$)/i.test(v.lang));
-    const pref = ['Samantha', 'Ava', 'Allison', 'Susan', 'Karen', 'Moira', 'Tessa', 'Google US English', 'Microsoft Aria', 'Microsoft Jenny'];
-    voice = pref.map(n => vs.find(v => v.name.includes(n))).find(Boolean) || vs.find(v => /en-US/i.test(v.lang)) || vs[0] || null;
+    const vs = speechSynthesis.getVoices().filter(v => /^en(-|_|$)/i.test(v.lang) && !NOVELTY.test(v.name));
+    voice = vs.sort((a, b) => voiceScore(b) - voiceScore(a))[0] || null;
   }
   if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.addEventListener?.('voiceschanged', pickVoice); }
   function stopTalking() {
@@ -102,7 +128,8 @@
   function say(text, then) {
     if (!B.voice || !('speechSynthesis' in window)) { then && then(); return; }
     const u = new SpeechSynthesisUtterance(text);
-    u.rate = B.rate; u.pitch = 1.2; u.volume = 1;
+    // A natural pitch: pushing it up is what made the old voice sound strange.
+    u.rate = B.rate; u.pitch = 1.05; u.volume = 1;
     if (voice) u.voice = voice;
     if (then) u.onend = then;
     speechSynthesis.speak(u);
@@ -112,9 +139,17 @@
     clipEl = new Audio(url); clipEl.play().catch(() => {});
     return true;
   }
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  const isNum = it => it && it.num !== undefined;
+  const thing = n => THINGS[n % THINGS.length];
+  const noun = n => n === 1 ? thing(n)[1] : thing(n)[2];
+  /* "Three cars!", "One puppy!", "No cookies!" */
+  function numPhrase(n) { return n === 0 ? `No ${noun(0)}!` : `${cap(NUMWORD(n))} ${noun(n)}!`; }
   function speakLetter(intro = '') {
     stopTalking();
-    const L = cur(); const name = NAMES[L.letter];
+    const L = cur();
+    if (isNum(L)) { say(`${intro}${cap(NUMWORD(L.num))}! ${numPhrase(L.num)}`); return; }
+    const name = NAMES[L.letter];
     const tail = L.word ? `${name} is for ${L.word}!` : '';
     if (L.voice && !intro) { playClip(L.voice); return; }
     say(`${intro}${name}! ${tail}`, intro && L.voice ? () => playClip(L.voice) : null);
@@ -159,24 +194,46 @@
   const geomCache = {};
 
   function charFor(L, c = S.case) { return c === 'lower' ? L.toLowerCase() : L.toUpperCase(); }
+  /* Glyph key: a letter ('A', 'a') or '#' + a number ('#7', '#42'). */
+  const glyphKey = it => isNum(it) ? '#' + it.num : charFor(it.letter);
+  const DIGIT_GAP = 30;                                       // space between the digits of 10, 42, 100 …
+  const measured = {};
+  function measure(d) {
+    if (measured[d]) return measured[d];
+    measurePath.setAttribute('d', d);
+    const len = measurePath.getTotalLength();
+    const n = Math.max(2, Math.ceil(len));
+    const pts = [];
+    for (let i = 0; i < n; i++) { const p = measurePath.getPointAtLength(len * i / (n - 1)); pts.push({ x: p.x, y: p.y }); }
+    return (measured[d] = { len, pts });
+  }
   function geom(ch) {
     if (geomCache[ch]) return geomCache[ch];
-    const set = ch === ch.toUpperCase() ? STROKES.upper : STROKES.lower;
-    const list = set[ch] || [];
+    let parts;
+    if (ch[0] === '#') {
+      // A number: its digits side by side, each one moved along by dx.
+      parts = []; let x = 0;
+      [...ch.slice(1)].forEach(dg => {
+        const list = STROKES.digits[dg] || [];
+        let a = 1e9, b = -1e9;
+        list.forEach(d => measure(d).pts.forEach(p => { a = Math.min(a, p.x); b = Math.max(b, p.x); }));
+        list.forEach(d => parts.push({ d, dx: x - a }));
+        x += b - a + DIGIT_GAP;
+      });
+    } else {
+      const set = ch === ch.toUpperCase() ? STROKES.upper : STROKES.lower;
+      parts = (set[ch] || []).map(d => ({ d, dx: 0 }));
+    }
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-    const strokes = list.map(d => {
-      measurePath.setAttribute('d', d);
-      const len = measurePath.getTotalLength();
-      const n = Math.max(2, Math.ceil(len));
-      const pts = [];
-      for (let i = 0; i < n; i++) {
-        const p = measurePath.getPointAtLength(len * i / (n - 1));
-        pts.push({ x: p.x, y: p.y });
-        x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y);
-      }
-      return { d, len, pts, tap: len < 6, path: new Path2D(d) };
+    const strokes = parts.map(({ d, dx }) => {
+      const m = measure(d);
+      const pts = m.pts.map(p => ({ x: p.x + dx, y: p.y }));
+      pts.forEach(p => { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); });
+      let path = new Path2D(d);
+      if (dx) { const moved = new Path2D(); moved.addPath(path, new DOMMatrix().translate(dx, 0)); path = moved; }
+      return { d, dx, len: m.len, pts, tap: m.len < 6, path };
     });
-    return (geomCache[ch] = { ch, strokes, x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 });
+    return (geomCache[ch] = { ch, strokes, x0, y0, x1, y1, w: x1 - x0, h: y1 - y0, digits: ch[0] === '#' ? ch.length - 1 : 0 });
   }
   function pointAt(stroke, f) {
     const p = stroke.pts; const i = clamp(f, 0, 1) * (p.length - 1);
@@ -189,7 +246,8 @@
     $$('.screen').forEach(s => s.classList.toggle('active', s.id === id));
     if (id === 'board') { relayout(); startLoop(); } else stopLoop();
   }
-  const cur = () => LETTERS[S.idx];
+  const items = () => S.set === '123' ? NUMBERS : LETTERS;
+  const cur = () => items()[S.idx];
 
   function titleSpans(el, text) {
     el.innerHTML = '';
@@ -208,7 +266,7 @@
     const vb = [g.x0 - pad, g.y0 - pad, Math.max(g.w, 30) + pad * 2, Math.max(g.h, 30) + pad * 2];
     if (g.w < 30) vb[0] -= (30 - g.w) / 2;
     if (g.h < 30) vb[1] -= (30 - g.h) / 2;
-    const ps = g.strokes.map(s => `<path d="${s.d}"/>`).join('');
+    const ps = g.strokes.map(s => `<path d="${s.d}"${s.dx ? ` transform="translate(${s.dx.toFixed(2)} 0)"` : ''}/>`).join('');
     return `<svg viewBox="${vb.join(' ')}" aria-hidden="true">
       <g fill="none" stroke-linecap="round" stroke-linejoin="round">
         <g stroke="rgba(30,10,80,.35)" stroke-width="27" transform="translate(0 4)">${ps}</g>
@@ -219,6 +277,12 @@
   }
   function buildGrid() {
     const grid = $('#grid'); grid.innerHTML = '';
+    const numbers = S.set === '123';
+    $$('.set-btn').forEach(b => b.classList.toggle('on', b.dataset.set === S.set));
+    $('#setSwitch').classList.toggle('hidden', !B.numbers);
+    $('#groupBack').classList.toggle('hidden', !(numbers && S.group >= 0 && GROUPS.length > 1));
+    $$('.case-btn').forEach(b => b.classList.toggle('hidden', !B.allowCase || numbers));
+    if (numbers) { buildNumberGrid(grid); return; }
     LETTERS.forEach((L, i) => {
       const ch = charFor(L.letter);
       const b = document.createElement('button');
@@ -233,10 +297,48 @@
       grid.appendChild(b);
     });
     $$('.case-btn').forEach(b => {
-      b.classList.toggle('hidden', !B.allowCase);
       b.innerHTML = b.id === 'caseBtnHome' ? (S.case === 'upper' ? 'ABC' : 'abc') : (S.case === 'upper' ? 'A<small style="opacity:.4">a</small>' : '<small style="opacity:.4">A</small>a');
     });
   }
+
+  /* Numbers: first pick a group (0–10, 11–20 …), then a number. */
+  function buildNumberGrid(grid) {
+    if (S.group < 0) {
+      GROUPS.forEach((g, i) => {
+        const b = document.createElement('button');
+        b.className = 'tile group-tile';
+        b.style.setProperty('--c', TILE_COLORS[i % TILE_COLORS.length]);
+        b.style.setProperty('--i', i);
+        b.setAttribute('aria-label', `${g.from} to ${g.to}`);
+        let all = true;
+        for (let n = g.from; n <= g.to; n++) if (!S.stars['123:' + n]) all = false;
+        b.innerHTML = `<span class="t-range">${g.from}<i>–</i>${g.to}</span><span class="t-emoji">${thing(i + 1)[0]}</span>` + (all ? '<span class="t-star">⭐</span>' : '');
+        b.addEventListener('click', () => { audio(); sfx.tap(); S.group = i; buildGrid(); $('#home').scrollTop = 0; });
+        grid.appendChild(b);
+      });
+      return;
+    }
+    const g = GROUPS[S.group];
+    for (let n = g.from; n <= g.to; n++) {
+      const b = document.createElement('button');
+      b.className = 'tile';
+      b.style.setProperty('--c', TILE_COLORS[n % TILE_COLORS.length]);
+      b.style.setProperty('--i', n - g.from);
+      b.setAttribute('aria-label', String(n));
+      const star = S.stars['123:' + n] ? '<span class="t-star">⭐</span>' : '';
+      b.innerHTML = letterSvg('#' + n, LETTER_COLORS[n % LETTER_COLORS.length]) + `<span class="t-emoji">${thing(n)[0]}</span>` + star;
+      b.addEventListener('click', () => { audio(); sfx.tap(); openLetter(n); });
+      grid.appendChild(b);
+    }
+  }
+  $$('.set-btn').forEach(b => b.addEventListener('click', () => {
+    if (S.set === b.dataset.set) return;
+    S.set = b.dataset.set; store.set('set', S.set);
+    S.group = GROUPS.length > 1 ? -1 : 0;
+    sfx.boing(); buildGrid(); $('#home').scrollTop = 0;
+    say(S.set === '123' ? 'Numbers!' : 'Letters!');
+  }));
+  $('#groupBack').addEventListener('click', () => { sfx.tap(); S.group = -1; buildGrid(); $('#home').scrollTop = 0; });
 
   /* ---------- Board state ---------- */
   const guide = $('#guide'), ink = $('#ink'), fx = $('#fx');
@@ -252,8 +354,9 @@
   function letterColor() { return LETTER_COLORS[S.idx % LETTER_COLORS.length]; }
 
   function openLetter(i, dir = 0) {
-    S.idx = (i + LETTERS.length) % LETTERS.length;
-    G = geom(charFor(cur().letter));
+    stopCount();
+    S.idx = (i + items().length) % items().length;
+    G = geom(glyphKey(cur()));
     inkStrokes = []; particles = []; fills = []; completed = false; popCount = 0;
     T = null;
     $('#nextBtn').classList.remove('glow');
@@ -268,11 +371,16 @@
 
   function updateWordCard() {
     const L = cur();
+    if (isNum(L)) {
+      $('#wordCard .wc-text').innerHTML = `<b>${L.num}</b> ${L.num === 0 ? 'no' : NUMWORD(L.num)} ${noun(L.num)}`;
+      $('#wcPic').innerHTML = thing(L.num)[0];
+    } else {
     $('#wordCard .wc-text').innerHTML = L.word ? `<b>${charFor(L.letter)}</b> is for ${escapeHtml(L.word)}` : `<b>${charFor(L.letter)}</b>`;
     $('#wcPic').innerHTML = L.image ? `<img src="${L.image}" alt="">` : (L.emoji || '🔤');
+    }
     const wc = $('#wordCard'); wc.classList.remove('bounce'); void wc.offsetWidth; wc.classList.add('bounce');
     $$('.mode-btn').forEach(b => b.classList.toggle('on', b.dataset.mode === S.mode));
-    $$('.case-btn').forEach(b => b.classList.toggle('hidden', !B.allowCase));
+    $$('.case-btn').forEach(b => b.classList.toggle('hidden', !B.allowCase || isNum(L)));
   }
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
@@ -317,6 +425,7 @@
     const pad = V.L * 0.7;
     const gw = Math.max(G.w, 40), gh = Math.max(G.h, 40);
     V.s = Math.min((area.w - pad * 2) / gw, (area.h - pad * 2) / gh);
+    if (G.digits > 1) V.L = Math.max(24, Math.min(V.L, V.s * 21));   // fat strokes would join neighbouring digits
     V.ox = area.x + area.w / 2 - (G.x0 + G.w / 2) * V.s;
     V.oy = area.y + area.h / 2 - (G.y0 + G.h / 2) * V.s;
     placeDots(); drawGuide(); redrawInk();
@@ -484,19 +593,29 @@
   function celebrate() {
     if (completed) return;
     completed = true;
-    const L = cur();
-    S.stars[S.case + ':' + L.letter] = 1; store.set('stars', S.stars);
+    const L = cur(), num = isNum(L);
+    S.stars[num ? '123:' + L.num : S.case + ':' + L.letter] = 1; store.set('stars', S.stars);
     sfx.fanfare();
     confetti();
-    const party = $('#party');
-    $('#partyPic').innerHTML = L.image ? `<img src="${L.image}" alt="">` : (L.emoji || '🎉');
-    $('#partyText').textContent = L.word ? `${charFor(L.letter)} is for ${L.word}!` : `Yay! ${charFor(L.letter)}!`;
+    stopCount();
+    const party = $('#party'), pic = $('#partyPic');
+    pic.classList.toggle('counted', num && L.num > 0);
+    if (num) {
+      if (L.num > 0) renderCount(pic, L.num, false); else pic.textContent = '🎉';
+      $('#partyText').textContent = L.num === 0 ? `0! No ${noun(0)}!` : `${L.num} ${noun(L.num)}!`;
+    } else {
+      pic.innerHTML = L.image ? `<img src="${L.image}" alt="">` : (L.emoji || '🎉');
+      $('#partyText').textContent = L.word ? `${charFor(L.letter)} is for ${L.word}!` : `Yay! ${charFor(L.letter)}!`;
+    }
     party.classList.add('active');
     party.style.pointerEvents = 'none';                 // a finger still drawing can't close it right away
     setTimeout(() => { party.style.pointerEvents = ''; }, 1400);
     stopTalking();
+    if (num) { say(`Hooray! You did it! ${cap(NUMWORD(L.num))}! ${numPhrase(L.num)}`); }
+    else {
     const name = NAMES[L.letter];
-    say(`Yay! You did it! ${name}!`, () => { if (L.voice) playClip(L.voice); else if (L.word) say(`${name} is for ${L.word}!`); });
+    say(`Hooray! You did it! ${name}!`, () => { if (L.voice) playClip(L.voice); else if (L.word) say(`${name} is for ${L.word}!`); });
+    }
     if (B.autoSave) saveDrawing(true);
     clearTimeout(celebrate.t);
     celebrate.t = setTimeout(hideParty, 3600);
@@ -648,13 +767,18 @@
   $('#playBtn').addEventListener('click', () => {
     audio(); unlockSpeech(); enterFS(); sfx.fanfare();
     show('home');
-    setTimeout(() => say("Let's draw letters!"), 300);
+    setTimeout(() => say(S.set === '123' ? "Let's draw numbers!" : "Let's draw letters!"), 300);
   });
-  $('#homeBtn').addEventListener('click', () => { sfx.tap(); stopTalking(); buildGrid(); show('home'); });
+  $('#homeBtn').addEventListener('click', () => {
+    sfx.tap(); stopTalking(); stopCount();
+    if (S.set === '123') S.group = GROUPS.length > 1 ? groupOf(cur().num) : 0;   // back to the numbers he was on
+    buildGrid(); show('home');
+  });
   $('#prevBtn').addEventListener('click', () => openLetter(S.idx - 1, -1));
   $('#nextBtn').addEventListener('click', () => openLetter(S.idx + 1, 1));
   $('#wordCard').addEventListener('click', () => {
-    audio(); updateWordCard(); speakLetter();
+    audio(); updateWordCard();
+    if (isNum(cur())) countUp(); else speakLetter();
     const r = $('#wcPic').getBoundingClientRect(); burst(r.left + r.width / 2, r.top + r.height / 2, 8, 'star');
   });
   $$('.mode-btn').forEach(b => b.addEventListener('click', () => {
@@ -677,6 +801,93 @@
     $('#nextBtn').classList.remove('glow');
   });
   $('#saveBtn').addEventListener('click', () => saveDrawing(false));
+
+  /* ---------- Counting (tap the number card) ---------- */
+  /* Lays out n things: one by one up to 20 (rows of 5, or a row of 10 then the rest),
+     above 20 as bars of ten plus the ones. Returns the steps to count: [{ el, k }]. */
+  function renderCount(box, n, animate) {
+    const e = thing(n)[0];
+    box.innerHTML = '';
+    const steps = [];
+    const mk = (cls, parent) => { const s = document.createElement('span'); s.className = cls + (animate ? '' : ' in'); s.textContent = e; parent.appendChild(s); return s; };
+    if (n <= 20) {
+      const wrap = document.createElement('div');
+      wrap.className = 'count-grid';
+      wrap.style.setProperty('--cols', n <= 10 ? Math.min(n, 5) : 10);
+      wrap.style.setProperty('--fs', n <= 5 ? 1 : n <= 10 ? .8 : .55);
+      for (let i = 1; i <= n; i++) {
+        const s = mk('c-thing', wrap);
+        if (!animate) s.style.animationDelay = (i * 40) + 'ms';
+        steps.push({ el: s, k: i });
+      }
+      box.appendChild(wrap);
+    } else {
+      const wrap = document.createElement('div');
+      wrap.className = 'count-bars';
+      const tens = Math.floor(n / 10), ones = n % 10;
+      for (let t = 1; t <= tens; t++) {
+        const bar = document.createElement('div');
+        bar.className = 'c-bar' + (animate ? '' : ' in');
+        if (!animate) bar.style.animationDelay = (t * 60) + 'ms';
+        for (let i = 0; i < 10; i++) { const s = document.createElement('span'); s.className = 'c-mini'; s.textContent = e; bar.appendChild(s); }
+        wrap.appendChild(bar);
+        steps.push({ el: bar, k: t * 10 });
+      }
+      if (ones) {
+        const row = document.createElement('div');
+        row.className = 'c-ones';
+        for (let i = 1; i <= ones; i++) {
+          const s = mk('c-thing', row);
+          if (!animate) s.style.animationDelay = ((tens + i) * 60) + 'ms';
+          steps.push({ el: s, k: tens * 10 + i });
+        }
+        wrap.appendChild(row);
+      }
+      box.appendChild(wrap);
+    }
+    return steps;
+  }
+  let countRun = 0;
+  function stopCount() {
+    countRun++;
+    $('#countBox').classList.remove('active');
+  }
+  /* Say one counting word, then carry on. Never waits on a voice that doesn't finish. */
+  function sayStep(text, then) {
+    let done = false;
+    const go = () => { if (!done) { done = true; then(); } };
+    if (B.voice && 'speechSynthesis' in window) { say(text, () => setTimeout(go, 80)); setTimeout(go, 1500); }
+    else setTimeout(go, 650);
+  }
+  function countUp() {
+    const n = cur().num, run = ++countRun;
+    stopTalking();
+    const box = $('#countBox'), big = $('#countSay');
+    const steps = renderCount($('#countStage'), n, true);
+    big.textContent = n === 0 ? '0' : '';
+    box.classList.remove('active'); void box.offsetWidth; box.classList.add('active');
+    const finish = () => {
+      if (run !== countRun) return;
+      sfx.chime();
+      const r = big.getBoundingClientRect(); burst(r.left + r.width / 2, r.top + r.height / 2, 14, 'star');
+      if (n <= 20) say(n === 0 ? `Zero! ${numPhrase(0)}` : numPhrase(n));
+      setTimeout(() => { if (run === countRun) stopCount(); }, n <= 20 ? 3200 : 2400);
+    };
+    let i = 0;
+    const next = () => {
+      if (run !== countRun) return;
+      if (i >= steps.length) { finish(); return; }
+      const st = steps[i++];
+      st.el.classList.add('in');
+      sfx.pop(i - 1);
+      big.textContent = st.k;
+      big.classList.remove('bump'); void big.offsetWidth; big.classList.add('bump');
+      // above 20 it counts the bars by tens, then the ones, and ends on the whole number: "Forty-two!"
+      sayStep(i === steps.length && n > 20 ? cap(NUMWORD(st.k)) + '!' : NUMWORD(st.k), next);
+    };
+    setTimeout(next, 350);
+  }
+  $('#countBox').addEventListener('pointerdown', e => { e.preventDefault(); stopTalking(); stopCount(); });
 
   /* ---------- Fridge ---------- */
   function snapshot() {
@@ -701,7 +912,7 @@
     sfx.magnet();
     fetch('api/drawings.php', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: url, letter: cur().letter, case: S.case, mode: S.mode, device: deviceId })
+      body: JSON.stringify(Object.assign(isNum(cur()) ? { number: cur().num } : { letter: cur().letter, case: S.case }, { image: url, mode: S.mode, device: deviceId }))
     }).catch(() => {}).finally(() => { saving = false; });
   }
   function wiggle(el) { el.classList.remove('saved'); void el.offsetWidth; el.classList.add('saved'); }
@@ -727,7 +938,7 @@
       const f = document.createElement('figure');
       f.style.setProperty('--r', rand(-5, 5).toFixed(1) + 'deg');
       f.style.setProperty('--m', CONF_COLORS[i % CONF_COLORS.length]);
-      f.innerHTML = `<img src="${d.url}" alt="" loading="lazy"><figcaption>${escapeHtml(d.letter)}</figcaption>`;
+      f.innerHTML = `<img src="${d.url}" alt="" loading="lazy"><figcaption>${escapeHtml(String(d.letter))}</figcaption>`;
       f.addEventListener('click', () => {
         sfx.tap(); const z = $('#fridgeZoom'); $('img', z).src = d.url; z.classList.add('active');
       });
@@ -745,7 +956,7 @@
     if (!e.target.closest('#home, .fridge-door, .swatches')) e.preventDefault();
   }, { passive: false });
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { stopTalking(); stopLoop(); }
+    if (document.hidden) { stopTalking(); stopCount(); stopLoop(); }
     else if ($('#board').classList.contains('active')) startLoop();
   });
 

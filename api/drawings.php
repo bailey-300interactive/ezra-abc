@@ -3,6 +3,7 @@ declare(strict_types=1);
 /**
  * GET  api/drawings.php            → the newest drawings for the fridge
  * POST api/drawings.php (JSON)     → save a drawing { image: "data:image/png;base64,...", letter, case, mode, device }
+ *                                    or, for a number, { image, number: 0-100, mode, device }
  */
 require __DIR__ . '/../inc/bootstrap.php';
 
@@ -13,7 +14,7 @@ if ($method === 'GET') {
     $rows = db()->query('SELECT id, letter, letter_case, file, UNIX_TIMESTAMP(created_at) AS t FROM drawings ORDER BY id DESC LIMIT 60')->fetchAll();
     json_out(['drawings' => array_map(fn($r) => [
         'id'     => (int)$r['id'],
-        'letter' => $r['letter_case'] === 'lower' ? strtolower($r['letter']) : $r['letter'],
+        'letter' => $r['letter_case'] === 'lower' ? strtolower($r['letter']) : $r['letter'],   // numbers are just '42'
         'url'    => $r['file'],
         't'      => (int)$r['t'],
     ], $rows)]);
@@ -24,14 +25,21 @@ if ($method !== 'POST') json_out(['error' => 'Method not allowed'], 405);
 $in = json_decode(file_get_contents('php://input') ?: '', true);
 if (!is_array($in)) json_out(['error' => 'Bad request'], 400);
 
-$letter = strtoupper((string)($in['letter'] ?? ''));
-$case   = ($in['case'] ?? '') === 'lower' ? 'lower' : 'upper';
+if (isset($in['number'])) {
+    $num = filter_var($in['number'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 100]]);
+    if ($num === false) json_out(['error' => 'Bad number'], 400);
+    $letter = (string)$num;
+    $case   = 'number';
+} else {
+    $letter = strtoupper((string)($in['letter'] ?? ''));
+    $case   = ($in['case'] ?? '') === 'lower' ? 'lower' : 'upper';
+    if (!preg_match('/^[A-Z]$/', $letter)) json_out(['error' => 'Bad letter'], 400);
+}
 $mode   = ($in['mode'] ?? '') === 'draw' ? 'draw' : 'trace';
 $device = preg_replace('/[^A-Za-z0-9_-]/', '', (string)($in['device'] ?? '')) ?: '';
 $device = substr($device, 0, 64);
 $image  = (string)($in['image'] ?? '');
 
-if (!preg_match('/^[A-Z]$/', $letter)) json_out(['error' => 'Bad letter'], 400);
 if (!preg_match('#^data:image/(png|jpeg);base64,#', $image, $m)) json_out(['error' => 'Bad image'], 400);
 
 $bin = base64_decode(substr($image, strpos($image, ',') + 1), true);
@@ -53,7 +61,7 @@ if ($w > $max || $hgt > $max) {
 
 $dir = UPLOAD_DIR . '/drawings/' . date('Y-m');
 if (!is_dir($dir) && !@mkdir($dir, 0775, true)) json_out(['error' => 'Uploads folder is not writable'], 500);
-$name = date('Ymd-His') . '-' . $letter . ($case === 'lower' ? 'l' : '') . '-' . bin2hex(random_bytes(4)) . '.jpg';
+$name = date('Ymd-His') . '-' . ($case === 'number' ? 'n' : '') . $letter . ($case === 'lower' ? 'l' : '') . '-' . bin2hex(random_bytes(4)) . '.jpg';
 if (!imagejpeg($img, "$dir/$name", 86)) json_out(['error' => 'Could not save'], 500);
 imagedestroy($img);
 

@@ -60,8 +60,38 @@ window.ABC_STROKES = {
     x: ['M8 45 L56 100', 'M56 45 L8 100'],
     y: ['M6 45 L34 98', 'M62 45 L30 116 C24 132 16 138 6 136'],
     z: ['M8 45 L56 45 L8 100 L56 100']
+  },
+  /* Digits use the capital-letter box (y 0 → 100). Bigger numbers are built from these, side by side. */
+  digits: {
+    0: ['M37 0 A30 50 0 0 0 37 100 A30 50 0 0 0 37 0'],
+    1: ['M12 24 L38 0 L38 100'],
+    2: ['M10 26 C12 -6 66 -8 66 28 C66 54 34 70 8 100 L68 100'],
+    3: ['M10 16 C22 -6 66 -4 64 24 C62 44 44 48 30 48 C48 48 70 56 68 76 C66 108 18 106 8 86'],
+    4: ['M48 0 L6 66 L72 66', 'M52 34 L52 100'],
+    5: ['M18 0 L14 46 C34 30 70 36 68 68 C66 106 18 106 8 84', 'M18 0 L64 0'],
+    6: ['M62 10 C48 -6 10 0 8 54 C6 90 22 100 38 100 C58 100 68 86 68 70 C68 52 54 42 38 42 C22 42 10 52 8 66'],
+    7: ['M8 0 L68 0 L28 100'],
+    8: ['M38 48 C14 48 12 0 38 0 C64 0 62 48 38 48 C8 48 8 100 38 100 C68 100 68 48 38 48'],
+    9: ['M66 30 C66 10 52 0 37 0 C20 0 8 12 8 30 C8 48 22 58 37 58 C54 58 66 46 66 30 L66 100']
   }
 };
+
+/* How numbers are said out loud, 0 to 100. */
+window.ABC_NUMBER_WORD = n => {
+  const ones = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+    'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+  const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+  if (n >= 100) return 'one hundred';
+  if (n < 20) return ones[n];
+  return tens[Math.floor(n / 10)] + (n % 10 ? '-' + ones[n % 10] : '');
+};
+
+/* Something to count for each number (by its last digit): emoji, one, many. */
+window.ABC_NUMBER_THINGS = [
+  ['🍪', 'cookie', 'cookies'], ['🐶', 'puppy', 'puppies'], ['👟', 'shoe', 'shoes'], ['🚗', 'car', 'cars'],
+  ['🍎', 'apple', 'apples'], ['⭐', 'star', 'stars'], ['🦆', 'duck', 'ducks'], ['🐟', 'fish', 'fish'],
+  ['🍓', 'strawberry', 'strawberries'], ['🐞', 'ladybug', 'ladybugs']
+];
 
 /* How each letter's name should be spoken (text-to-speech reads a lone "A" as "uh"). */
 window.ABC_NAMES = {

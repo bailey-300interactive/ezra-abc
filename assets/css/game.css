@@ -258,3 +258,57 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; touch-action
 .party-stars { font-size: clamp(30px, 6vmin, 60px); letter-spacing: .2em; }
 .party-stars { animation: twinkle 1s ease-in-out infinite; }
 
+
+/* ---------- Numbers ---------- */
+/* ABC / 123 switch: the same white pill as the ✏️ / 🎨 switch */
+.set-switch { display: inline-flex; background: #fff; border-radius: calc(var(--btn) / 2); padding: 5px; gap: 4px; box-shadow: 0 6px 0 rgba(0,0,0,.18), 0 10px 20px rgba(0,0,0,.12); }
+.set-btn {
+  height: calc(var(--btn) - 10px); padding: 0 .55em; border-radius: calc(var(--btn) / 2);
+  background: transparent; font-weight: 700; font-size: calc(var(--btn) * .36); color: var(--purple);
+  letter-spacing: .02em; opacity: .45; transition: all .2s;
+}
+.set-btn.on { background: var(--sun); color: var(--ink); opacity: 1; transform: scale(1.05); }
+.back-btn { color: var(--purple); font-weight: 700; }
+
+/* Group tiles (0–10, 11–20 …): chunky white numbers with the ink outline, like the letter tiles */
+.group-tile .t-range {
+  font-weight: 700; font-size: clamp(30px, 5.4vmin, 60px); line-height: 1; color: #fff; white-space: nowrap;
+  -webkit-text-stroke: .13em var(--ink); paint-order: stroke fill;
+  text-shadow: 0 .1em 0 rgba(30,10,80,.35);
+  margin-bottom: 10%;
+}
+.group-tile .t-range i { font-style: normal; font-size: .7em; padding: 0 .04em; vertical-align: .12em; }
+
+/* Counting card on the board */
+.count-box {
+  position: absolute; left: 50%; top: 52%; z-index: 4;
+  transform: translate(-50%, -50%);
+  display: none; flex-direction: column; align-items: center; gap: 1.2vmin;
+  max-width: min(92vw, 900px); padding: 2.6vmin 4vmin 2vmin;
+  background: rgba(255,255,255,.97); border-radius: 40px;
+  box-shadow: 0 1.6vmin 0 rgba(0,0,0,.12), 0 3vmin 8vmin rgba(40,10,120,.3);
+}
+.count-box.active { display: flex; animation: countIn .5s cubic-bezier(.2,1.6,.4,1) both; }
+@keyframes countIn { from { transform: translate(-50%, -50%) scale(.2) rotate(-12deg); opacity: 0; } }
+.count-say { font-weight: 700; font-size: clamp(44px, 10vmin, 110px); line-height: 1; color: var(--purple); min-height: 1em; }
+.count-say.bump { animation: bump .35s cubic-bezier(.2,1.8,.4,1); }
+@keyframes bump { 40% { transform: scale(1.35); } }
+
+/* Things to count: used by the counting card and the celebration card */
+.count-grid { display: grid; grid-template-columns: repeat(var(--cols, 5), auto); justify-content: center; gap: .08em .14em; font-size: calc(var(--fs, 1) * clamp(48px, 10vmin, 110px)); line-height: 1.15; }
+.count-bars { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 1vmin 1.6vmin; max-width: min(86vw, 820px); }
+.c-bar {
+  display: flex; padding: .3vmin .9vmin; border-radius: 999px;
+  background: #fff6cf; border: .5vmin solid var(--sun);
+  box-shadow: 0 .6vmin 0 rgba(0,0,0,.08);
+  transform: scale(0); font-size: clamp(16px, 2.9vmin, 30px); line-height: 1.2;
+}
+.c-ones { display: flex; gap: .4vmin; font-size: clamp(28px, 5vmin, 54px); line-height: 1.1; }
+.c-thing { display: inline-block; transform: scale(0); }
+.c-thing.in, .c-bar.in { animation: thingIn .38s cubic-bezier(.2,1.8,.4,1) both; }
+@keyframes thingIn { 0% { transform: scale(0) rotate(-30deg); } 100% { transform: scale(1) rotate(0); } }
+
+/* Celebration card for a number: the things instead of one big picture */
+.party-pic.counted { font-size: inherit; line-height: 1; animation: none; margin-bottom: 1.4vmin; }
+.party-pic.counted .count-grid { font-size: calc(var(--fs, 1) * clamp(44px, 9vmin, 96px)); }
+.party-pic.counted .count-grid, .party-pic.counted .count-bars { animation: dance 1.6s ease-in-out infinite; }

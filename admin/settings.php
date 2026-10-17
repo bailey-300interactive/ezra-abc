@@ -25,7 +25,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         save_setting('default_mode', ($_POST['default_mode'] ?? '') === 'draw' ? 'draw' : 'trace');
         save_setting('difficulty', ($_POST['difficulty'] ?? '') === 'medium' ? 'medium' : 'easy');
         save_setting('speech_rate', (string)max(0.5, min(1.3, (float)($_POST['speech_rate'] ?? 0.85))));
-        foreach (['allow_case', 'voice_on', 'sounds_on', 'show_fridge', 'auto_save'] as $k) {
+        $max = (int)($_POST['number_max'] ?? 100);
+        save_setting('number_max', (string)(in_array($max, [10, 20, 50, 100], true) ? $max : 100));
+        foreach (['allow_case', 'numbers_on', 'voice_on', 'sounds_on', 'show_fridge', 'auto_save'] as $k) {
             save_setting($k, !empty($_POST[$k]) ? '1' : '0');
         }
         flash('Settings saved. Reload the game on the iPad to pick them up.');
@@ -51,6 +53,15 @@ admin_header('Settings', 'settings');
   </fieldset>
 
   <fieldset>
+    <legend>Numbers</legend>
+    <label class="check"><input type="checkbox" name="numbers_on" value="1" <?= $chk('numbers_on') ?>> Show the ABC / 123 switch so Ezra can trace numbers too</label>
+    <?php foreach ([10 => 'Up to 10', 20 => 'Up to 20', 50 => 'Up to 50', 100 => 'Up to 100'] as $n => $label): ?>
+      <label class="radio"><input type="radio" name="number_max" value="<?= $n ?>" <?= (int)$S['number_max'] === $n ? 'checked' : '' ?>> <?= h($label) ?></label>
+    <?php endforeach; ?>
+    <p class="hint">Numbers start at 0 and come in groups (0–10, 11–20 …). Tapping the number card counts the things out loud.</p>
+  </fieldset>
+
+  <fieldset>
     <legend>Start in</legend>
     <label class="radio"><input type="radio" name="default_mode" value="trace" <?= $S['default_mode'] !== 'draw' ? 'checked' : '' ?>> ✏️ Trace (follow the dots)</label>
     <label class="radio"><input type="radio" name="default_mode" value="draw" <?= $S['default_mode'] === 'draw' ? 'checked' : '' ?>> 🎨 Free draw</label>
@@ -67,6 +78,7 @@ admin_header('Settings', 'settings');
     <legend>Sound</legend>
     <label class="check"><input type="checkbox" name="sounds_on" value="1" <?= $chk('sounds_on') ?>> Sound effects (pops, chimes, music notes when drawing)</label>
     <label class="check"><input type="checkbox" name="voice_on" value="1" <?= $chk('voice_on') ?>> Say the letter and word out loud</label>
+    <p class="hint">The game picks the most natural voice on the iPad. For the nicest one, on the iPad go to Settings → Accessibility → Spoken Content → Voices → English and download <b>Ava (Premium)</b> or <b>Zoe (Premium)</b>. Your own recorded clips always play instead when a letter has one.</p>
     <label>Talking speed <input type="range" name="speech_rate" min="0.5" max="1.3" step="0.05" value="<?= h($S['speech_rate']) ?>" oninput="this.nextElementSibling.textContent=this.value"><output><?= h($S['speech_rate']) ?></output></label>
   </fieldset>
 

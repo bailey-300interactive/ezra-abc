@@ -48,6 +48,8 @@ function default_settings(): array
         'difficulty'     => 'easy',    // easy | medium
         'show_fridge'    => '1',       // kid can open the fridge of saved drawings
         'auto_save'      => '1',       // save a finished tracing to the fridge automatically
+        'numbers_on'     => '1',       // show the ABC / 123 switch so he can trace numbers too
+        'number_max'     => '100',     // count up to 10 | 20 | 50 | 100
     ];
 }
 
