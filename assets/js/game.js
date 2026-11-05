@@ -45,8 +45,10 @@
     brush: store.get('brush', 'rainbow'),
     stars: store.get('stars', {}),
     set: B.numbers ? store.get('set', 'abc') : 'abc',      // 'abc' letters or '123' numbers
-    group: GROUPS.length > 1 ? -1 : 0                         // which number group is open (-1 = pick a group)
+    group: GROUPS.length > 1 ? -1 : 0,                        // which number group is open (-1 = pick a group)
+    lang: B.langSwitch ? store.get('lang', B.numberLang) : B.numberLang   // numbers in 'en' English or 'es' Spanish
   };
+  if (S.lang !== 'es') S.lang = 'en';
   if (!B.allowCase) S.case = B.case;
   if (S.set !== '123') S.set = 'abc';
 
@@ -99,42 +101,69 @@
   };
 
   /* ---------- Speech (uses the iPad's built-in voice, or your recorded clip) ---------- */
-  let voice = null, clipEl = null;
+  /* Two voices: an English one for everything, and a Spanish one for the numbers when they're in Spanish. */
+  const voices = { en: null, es: null };
+  let clipEl = null;
   /* Pick the warmest-sounding voice the device has. The high-quality "Premium" / "Enhanced" / "Natural"
      voices sound like a real person; the basic compact ones sound robotic, so they come last. Novelty
      voices (Bells, Zarvox, Whisper…) are never used. */
-  const WARM = ['Ava', 'Zoe', 'Samantha', 'Nicky', 'Allison', 'Susan', 'Joelle', 'Evan', 'Nathan', 'Tom',
-    'Serena', 'Kate', 'Karen', 'Moira', 'Tessa', 'Jenny', 'Aria', 'Emma', 'Ana', 'Libby', 'Sonia', 'Google US English'];
+  const WARM = {
+    en: ['Ava', 'Zoe', 'Samantha', 'Nicky', 'Allison', 'Susan', 'Joelle', 'Evan', 'Nathan', 'Tom',
+      'Serena', 'Kate', 'Karen', 'Moira', 'Tessa', 'Jenny', 'Aria', 'Emma', 'Ana', 'Libby', 'Sonia', 'Google US English'],
+    es: ['Paulina', 'Marisol', 'Mónica', 'Monica', 'Angélica', 'Isabela', 'Juan', 'Jorge', 'Diego', 'Francisca',
+      'Dalia', 'Elvira', 'Google español de Estados Unidos', 'Google español']
+  };
+  const LANG_RE = { en: /^en(-|_|$)/i, es: /^es(-|_|$)/i };
   const NOVELTY = /albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|good news|hysterical|jester|junior|organ|superstar|trinoids|whisper|wobble|zarvox|ralph|fred|kathy|princess|eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley/i;
-  function voiceScore(v) {
+  function voiceScore(v, lang) {
     let s = 0;
     if (/premium/i.test(v.name)) s += 60;
     else if (/enhanced|neural|natural|online/i.test(v.name)) s += 45;
-    const w = WARM.findIndex(n => v.name.includes(n));
+    const w = WARM[lang].findIndex(n => v.name.includes(n));
     if (w >= 0) s += 30 - w;
-    if (/en[-_]US/i.test(v.lang)) s += 6; else if (/en[-_](GB|AU|IE|CA)/i.test(v.lang)) s += 3;
+    if (lang === 'en') { if (/en[-_]US/i.test(v.lang)) s += 6; else if (/en[-_](GB|AU|IE|CA)/i.test(v.lang)) s += 3; }
+    else if (/es[-_](MX|US|419)/i.test(v.lang)) s += 6; else if (/es[-_]ES/i.test(v.lang)) s += 3;
     if (v.localService) s += 2;                     // works without the internet
     return s;
   }
+  /* The voices worth hearing for a language, best first (the ones the 🗣️ button steps through). */
+  function goodVoices(lang) {
+    if (!('speechSynthesis' in window)) return [];
+    const seen = new Set();
+    return speechSynthesis.getVoices()
+      .filter(v => LANG_RE[lang].test(v.lang) && !NOVELTY.test(v.name) && !seen.has(v.name) && seen.add(v.name))
+      .sort((a, b) => voiceScore(b, lang) - voiceScore(a, lang));
+  }
+  const ADMIN_VOICE = { en: B.voiceName || '', es: B.voiceNameEs || '' };
   function pickVoice() {
     if (!('speechSynthesis' in window)) return;
     const all = speechSynthesis.getVoices();
-    // the voice picked in the admin's Settings, if this device has it
-    if (B.voiceName) { const chosen = all.find(v => v.name === B.voiceName); if (chosen) { voice = chosen; return; } }
-    const vs = all.filter(v => /^en(-|_|$)/i.test(v.lang) && !NOVELTY.test(v.name));
-    voice = vs.sort((a, b) => voiceScore(b) - voiceScore(a))[0] || null;
+    ['en', 'es'].forEach(lang => {
+      // 1. picked on this iPad with the 🗣️ button (dropped if you've since picked another one in Settings)
+      const mine = store.get('voice_' + lang, null);
+      if (mine && mine.base === ADMIN_VOICE[lang]) { const v = all.find(x => x.name === mine.name); if (v) { voices[lang] = v; return; } }
+      // 2. the voice picked in the admin's Settings, if this device has it
+      if (ADMIN_VOICE[lang]) { const v = all.find(x => x.name === ADMIN_VOICE[lang]); if (v) { voices[lang] = v; return; } }
+      // 3. the most natural one on the device
+      voices[lang] = goodVoices(lang)[0] || null;
+    });
   }
   if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.addEventListener?.('voiceschanged', pickVoice); }
   function stopTalking() {
     if ('speechSynthesis' in window) speechSynthesis.cancel();
     if (clipEl) { clipEl.pause(); clipEl = null; }
   }
-  function say(text, then) {
+  /* Spanish only ever applies to the numbers side; letters stay in English. */
+  const spanish = () => B.numbers && S.set === '123' && S.lang === 'es';
+  const speechLang = () => spanish() ? 'es' : 'en';
+  function say(text, then, lang = speechLang()) {
     if (!B.voice || !('speechSynthesis' in window)) { then && then(); return; }
     const u = new SpeechSynthesisUtterance(text);
     // A natural pitch: pushing it up is what made the old voice sound strange.
     u.rate = B.rate; u.pitch = B.pitch || 1.05; u.volume = 1;
-    if (voice) u.voice = voice;
+    const v = voices[lang];
+    if (v) u.voice = v;
+    u.lang = v ? v.lang : (lang === 'es' ? 'es-MX' : 'en-US');   // no Spanish voice picked: let the iPad find one
     if (then) u.onend = then;
     speechSynthesis.speak(u);
   }
@@ -147,29 +176,71 @@
     el.play().catch(() => next());
     return true;
   }
+  /* Your recordings are in English, so in Spanish the voice says it instead. */
+  const clipOf = it => spanish() ? null : it.voice;
   /* "Hooray! You did it!": the letter's or number's own recording, else the one from Settings, else the voice. */
   function cheer(item, then) {
+    if (spanish()) { say('¡Hurra! ¡Lo hiciste!', then); return; }
     const url = item.cheer || B.cheer;
     if (url && B.voice) playClip(url, then); else say('Hooray! You did it!', then);
   }
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
   const isNum = it => it && it.num !== undefined;
   const thing = n => THINGS[n % THINGS.length];
-  const noun = n => n === 1 ? thing(n)[1] : thing(n)[2];
-  /* "Three cars!", "One puppy!", "No cookies!" */
-  function numPhrase(n) { return n === 0 ? `No ${noun(0)}!` : `${cap(NUMWORD(n))} ${noun(n)}!`; }
+  const ES = window.ABC_ES;
+  const esThing = n => ES.things[n % ES.things.length];
+  const noun = n => spanish() ? esThing(n)[n === 1 ? 1 : 2] : (n === 1 ? thing(n)[1] : thing(n)[2]);
+  /* How a number is said on its own: "three" / "tres", "forty-two" / "cuarenta y dos". */
+  const numWord = n => spanish() ? ES.word(n) : NUMWORD(n);
+  /* "Three cars!", "One puppy!", "No cookies!"  ·  "¡Tres carros!", "¡Un perrito!", "¡Cero galletas!" */
+  function numPhrase(n) {
+    if (spanish()) return n === 0 ? `¡Cero ${noun(0)}!` : `¡${cap(ES.word(n, esThing(n)[3]))} ${noun(n)}!`;
+    return n === 0 ? `No ${noun(0)}!` : `${cap(NUMWORD(n))} ${noun(n)}!`;
+  }
+  /* "Three! Three cars!"  ·  "¡Tres! ¡Tres carros!" */
+  const numSay = n => spanish() ? `¡${cap(ES.word(n))}! ${numPhrase(n)}` : `${cap(NUMWORD(n))}! ${numPhrase(n)}`;
   function speakLetter(intro = '') {
     stopTalking();
     const L = cur();
     if (isNum(L)) {
-      if (L.voice && !intro) { playClip(L.voice); return; }
-      say(`${intro}${cap(NUMWORD(L.num))}! ${numPhrase(L.num)}`, intro && L.voice ? () => playClip(L.voice) : null);
+      const clip = clipOf(L);
+      if (clip && !intro) { playClip(clip); return; }
+      say(`${intro}${numSay(L.num)}`, intro && clip ? () => playClip(clip) : null);
       return;
     }
     const name = NAMES[L.letter];
     const tail = L.word ? `${name} is for ${L.word}!` : '';
     if (L.voice && !intro) { playClip(L.voice); return; }
     say(`${intro}${name}! ${tail}`, intro && L.voice ? () => playClip(L.voice) : null);
+  }
+
+  /* ---------- 🗣️ Voice button: hear the next voice on this iPad ---------- */
+  /* "Ava (Premium)" → "Ava"; big-company voices just say hello. */
+  function voiceShortName(v) {
+    const n = v.name.replace(/\(.*?\)/g, '').replace(/\b(premium|enhanced|compact|natural|neural|online)\b/gi, '').trim();
+    return /google|microsoft|android/i.test(n) || n.split(/\s+/).length > 2 ? '' : n;
+  }
+  function voiceToast(text) {
+    const t = $('#voiceToast');
+    t.textContent = text;
+    t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
+    clearTimeout(voiceToast.t); voiceToast.t = setTimeout(() => t.classList.remove('show'), 2600);
+  }
+  function nextVoice() {
+    const lang = speechLang(), list = goodVoices(lang);
+    stopTalking();
+    if (!list.length) {
+      voiceToast(lang === 'es' ? 'No Spanish voices on this iPad' : 'No voices on this iPad');
+      say(lang === 'es' ? '¡Hola!' : 'Hi!');
+      return;
+    }
+    const v = list[(list.indexOf(voices[lang]) + 1) % list.length];
+    voices[lang] = v;
+    store.set('voice_' + lang, { name: v.name, base: ADMIN_VOICE[lang] });
+    const who = voiceShortName(v);
+    voiceToast(`${v.name.replace(/\s*\(.*?\)\s*/g, ' ').trim()}  ${list.indexOf(v) + 1}/${list.length}`);
+    if (lang === 'es') say(who ? `¡Hola! ¡Soy ${who}! ¡Uno, dos, tres!` : '¡Hola! ¡Uno, dos, tres!');
+    else say(who ? `Hi! I'm ${who}! One, two, three!` : 'Hi there! One, two, three!');
   }
   function unlockSpeech() {
     if (!('speechSynthesis' in window)) return;
@@ -295,7 +366,9 @@
   function buildGrid() {
     const grid = $('#grid'); grid.innerHTML = '';
     const numbers = S.set === '123';
-    $$('.set-btn').forEach(b => b.classList.toggle('on', b.dataset.set === S.set));
+    $$('.set-btn[data-set]').forEach(b => b.classList.toggle('on', b.dataset.set === S.set));
+    $('#langSwitch').classList.toggle('hidden', !(numbers && B.numbers && B.langSwitch));
+    $$('.lang-btn').forEach(b => b.classList.toggle('on', b.dataset.lang === S.lang));
     $('#setSwitch').classList.toggle('hidden', !B.numbers);
     $('#groupBack').classList.toggle('hidden', !(numbers && S.group >= 0 && GROUPS.length > 1));
     $$('.case-btn').forEach(b => b.classList.toggle('hidden', !B.allowCase || numbers));
@@ -348,13 +421,22 @@
       grid.appendChild(b);
     }
   }
-  $$('.set-btn').forEach(b => b.addEventListener('click', () => {
+  $$('.set-btn[data-set]').forEach(b => b.addEventListener('click', () => {
     if (S.set === b.dataset.set) return;
     S.set = b.dataset.set; store.set('set', S.set);
     S.group = GROUPS.length > 1 ? -1 : 0;
     sfx.boing(); buildGrid(); $('#home').scrollTop = 0;
-    say(S.set === '123' ? 'Numbers!' : 'Letters!');
+    say(S.set === '123' ? (spanish() ? '¡Números!' : 'Numbers!') : 'Letters!');
   }));
+  $$('.lang-btn').forEach(b => b.addEventListener('click', () => {
+    audio();
+    if (S.lang === b.dataset.lang) return;
+    S.lang = b.dataset.lang; store.set('lang', S.lang);
+    sfx.boing(); buildGrid(); stopTalking();
+    say(S.lang === 'es' ? '¡Español! ¡Uno, dos, tres!' : 'English! One, two, three!');
+  }));
+  $('#voiceBtn').classList.toggle('hidden', !(B.voice && B.voiceButton && 'speechSynthesis' in window));
+  $('#voiceBtn').addEventListener('click', () => { audio(); sfx.tap(); nextVoice(); });
   $('#groupBack').addEventListener('click', () => { sfx.tap(); S.group = -1; buildGrid(); $('#home').scrollTop = 0; });
 
   /* ---------- Board state ---------- */
@@ -389,7 +471,8 @@
   function updateWordCard() {
     const L = cur();
     if (isNum(L)) {
-      $('#wordCard .wc-text').innerHTML = `<b>${L.num}</b> ${L.num === 0 ? 'no' : NUMWORD(L.num)} ${noun(L.num)}`;
+      const w = spanish() ? ES.word(L.num, esThing(L.num)[3]) : (L.num === 0 ? 'no' : NUMWORD(L.num));
+      $('#wordCard .wc-text').innerHTML = `<b>${L.num}</b> ${w} ${noun(L.num)}`;
       $('#wcPic').innerHTML = thing(L.num)[0];
     } else {
     $('#wordCard .wc-text').innerHTML = L.word ? `<b>${charFor(L.letter)}</b> is for ${escapeHtml(L.word)}` : `<b>${charFor(L.letter)}</b>`;
@@ -619,7 +702,7 @@
     pic.classList.toggle('counted', num && L.num > 0);
     if (num) {
       if (L.num > 0) renderCount(pic, L.num, false); else pic.textContent = '🎉';
-      $('#partyText').textContent = L.num === 0 ? `0! No ${noun(0)}!` : `${L.num} ${noun(L.num)}!`;
+      $('#partyText').textContent = spanish() ? `¡${L.num} ${noun(L.num)}!` : L.num === 0 ? `0! No ${noun(0)}!` : `${L.num} ${noun(L.num)}!`;
     } else {
       pic.innerHTML = L.image ? `<img src="${L.image}" alt="">` : (L.emoji || '🎉');
       $('#partyText').textContent = L.word ? `${charFor(L.letter)} is for ${L.word}!` : `Yay! ${charFor(L.letter)}!`;
@@ -628,7 +711,7 @@
     party.style.pointerEvents = 'none';                 // a finger still drawing can't close it right away
     setTimeout(() => { party.style.pointerEvents = ''; }, 1400);
     stopTalking();
-    if (num) cheer(L, () => { if (L.voice) playClip(L.voice); else say(`${cap(NUMWORD(L.num))}! ${numPhrase(L.num)}`); });
+    if (num) cheer(L, () => { if (clipOf(L)) playClip(clipOf(L)); else say(numSay(L.num)); });
     else {
       const name = NAMES[L.letter];
       cheer(L, () => { if (L.voice) playClip(L.voice); else say(L.word ? `${name}! ${name} is for ${L.word}!` : `${name}!`); });
@@ -784,7 +867,7 @@
   $('#playBtn').addEventListener('click', () => {
     audio(); unlockSpeech(); enterFS(); sfx.fanfare();
     show('home');
-    setTimeout(() => say(S.set === '123' ? "Let's draw numbers!" : "Let's draw letters!"), 300);
+    setTimeout(() => say(S.set === '123' ? (spanish() ? '¡Vamos a dibujar números!' : "Let's draw numbers!") : "Let's draw letters!"), 300);
   });
   $('#homeBtn').addEventListener('click', () => {
     sfx.tap(); stopTalking(); stopCount();
@@ -888,8 +971,8 @@
       sfx.chime();
       const r = big.getBoundingClientRect(); burst(r.left + r.width / 2, r.top + r.height / 2, 14, 'star');
       const it = cur();
-      if (it.voice) playClip(it.voice);                         // your recording of "Three! Three cars!"
-      else if (n <= 20) say(n === 0 ? `Zero! ${numPhrase(0)}` : numPhrase(n));
+      if (clipOf(it)) playClip(clipOf(it));                     // your recording of "Three! Three cars!"
+      else if (n <= 20) say(n === 0 ? numSay(0) : numPhrase(n));
       setTimeout(() => { if (run === countRun) stopCount(); }, n <= 20 ? 3200 : 2400);
     };
     let i = 0;
@@ -902,7 +985,7 @@
       big.textContent = st.k;
       big.classList.remove('bump'); void big.offsetWidth; big.classList.add('bump');
       // above 20 it counts the bars by tens, then the ones, and ends on the whole number: "Forty-two!"
-      sayStep(i === steps.length && n > 20 ? cap(NUMWORD(st.k)) + '!' : NUMWORD(st.k), next);
+      sayStep(i === steps.length && n > 20 ? (spanish() ? '¡' : '') + cap(numWord(st.k)) + '!' : numWord(st.k), next);
     };
     setTimeout(next, 350);
   }

@@ -93,6 +93,27 @@ window.ABC_NUMBER_THINGS = [
   ['🍓', 'strawberry', 'strawberries'], ['🐞', 'ladybug', 'ladybugs']
 ];
 
+/* Spanish for the numbers side.
+   word(n)        how a number is said on its own, for counting: "uno", "veintiuno", "cuarenta y dos".
+   word(n, 'f')   before a noun, "uno" agrees with it: "un carro", "una galleta", "veintiún patos", "treinta y una fresas".
+   things         the same things to count as above, in the same order: emoji, one, many, gender. */
+window.ABC_ES = {
+  word(n, g) {
+    const ones = ['cero', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez',
+      'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve',
+      'veinte', 'veintiuno', 'veintidós', 'veintitrés', 'veinticuatro', 'veinticinco', 'veintiséis', 'veintisiete', 'veintiocho', 'veintinueve'];
+    const tens = ['', '', '', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
+    let w = n >= 100 ? 'cien' : n < 30 ? ones[n] : tens[Math.floor(n / 10)] + (n % 10 ? ' y ' + ones[n % 10] : '');
+    if (g && /uno$/.test(w)) w = w.replace(/uno$/, g === 'f' ? 'una' : (n === 21 ? 'ún' : 'un'));
+    return w;
+  },
+  things: [
+    ['🍪', 'galleta', 'galletas', 'f'], ['🐶', 'perrito', 'perritos', 'm'], ['👟', 'zapato', 'zapatos', 'm'], ['🚗', 'carro', 'carros', 'm'],
+    ['🍎', 'manzana', 'manzanas', 'f'], ['⭐', 'estrella', 'estrellas', 'f'], ['🦆', 'pato', 'patos', 'm'], ['🐟', 'pez', 'peces', 'm'],
+    ['🍓', 'fresa', 'fresas', 'f'], ['🐞', 'mariquita', 'mariquitas', 'f']
+  ]
+};
+
 /* How each letter's name should be spoken (text-to-speech reads a lone "A" as "uh"). */
 window.ABC_NAMES = {
   A: 'Ay', B: 'Bee', C: 'See', D: 'Dee', E: 'Ee', F: 'Eff', G: 'Gee', H: 'Aitch', I: 'Eye',

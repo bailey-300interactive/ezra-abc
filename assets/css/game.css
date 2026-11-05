@@ -312,3 +312,18 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; touch-action
 .party-pic.counted { font-size: inherit; line-height: 1; animation: none; margin-bottom: 1.4vmin; }
 .party-pic.counted .count-grid { font-size: calc(var(--fs, 1) * clamp(44px, 9vmin, 96px)); }
 .party-pic.counted .count-grid, .party-pic.counted .count-bars { animation: dance 1.6s ease-in-out infinite; }
+
+/* ---------- Voice + language ---------- */
+/* 🇺🇸 / 🇪🇸: the same pill as ABC / 123, flags a bit bigger */
+.lang-btn { font-size: calc(var(--btn) * .44); padding: 0 .35em; opacity: .5; }
+.lang-btn.on { opacity: 1; }
+/* Which voice is talking, shown for a moment under the top bar after tapping 🗣️ */
+.voice-toast {
+  position: fixed; z-index: 60; left: 50%; top: calc(var(--safe-t) + var(--btn) + 34px);
+  transform: translate(-50%, -12px); opacity: 0; pointer-events: none;
+  background: #fff; color: var(--purple); font-weight: 600; font-size: clamp(16px, 2.6vmin, 24px);
+  padding: .5em 1.1em; border-radius: 999px; white-space: nowrap;
+  box-shadow: 0 6px 0 rgba(0,0,0,.18), 0 10px 20px rgba(0,0,0,.12);
+  transition: opacity .25s, transform .25s;
+}
+.voice-toast.show { opacity: 1; transform: translate(-50%, 0); }

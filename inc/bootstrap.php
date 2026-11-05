@@ -52,6 +52,10 @@ function default_settings(): array
         'number_max'     => '100',     // count up to 10 | 20 | 50 | 100
         'voice_name'     => '',        // a voice picked in Settings ('' = pick the most natural one on the device)
         'voice_pitch'    => '1.05',
+        'voice_name_es'  => '',        // Spanish voice for the numbers ('' = the most natural Spanish one on the device)
+        'voice_button'   => '1',       // show the 🗣️ button in the game to switch voices on that iPad
+        'number_lang'    => 'en',      // numbers start in en English | es Spanish
+        'lang_switch'    => '1',       // show the 🇺🇸 / 🇪🇸 switch on the numbers screen
         'cheer_clip'     => '',        // your own "Hooray! You did it!" recording, used when a letter/number has none
     ];
 }

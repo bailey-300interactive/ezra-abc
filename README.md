@@ -24,6 +24,15 @@ the words and pictures, record your own voice, and see the drawings Ezra saves t
 - **Counting**: tap the number card at the top. Up to 20, the things pop in one at a time while the
   voice counts “one, two, three…”. Above 20 it counts by tens with ten-bars (“ten, twenty, thirty,
   forty…”) and then the ones, ending on “Forty-two!”.
+- **🗣️ Change the voice**: tap the 🗣️ button on the home screen to hear the next voice on the iPad
+  (“Hi! I'm Ava! One, two, three!”). The iPad remembers the pick. Turn the button off, or pick the voice
+  for every device, under Settings → Voice.
+- **Numbers in Spanish 🇪🇸**: on the numbers screen the 🇺🇸 / 🇪🇸 switch makes the numbers Spanish:
+  “¡Tres! ¡Tres carros!”, counting “uno, dos, tres…”, “diez, veinte, treinta…” and “¡Hurra! ¡Lo hiciste!”.
+  Letters stay in English. Settings → Numbers picks the starting language and can hide the switch;
+  Settings → Voice picks the Spanish voice (download one on the iPad: Settings → Accessibility →
+  Spoken Content → Voices → Spanish, e.g. Paulina). Recorded number clips are English, so they're
+  skipped in Spanish.
 - Pinch-zoom, double-tap zoom, page scrolling and the long-press menu are all blocked so little
   fingers can't wander off.
 

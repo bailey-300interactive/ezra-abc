@@ -26,12 +26,16 @@ $boot = [
     'rate'        => max(0.5, min(1.3, (float)$S['speech_rate'])),
     'pitch'       => max(0.7, min(1.5, (float)$S['voice_pitch'])),
     'voiceName'   => $S['voice_name'],
+    'voiceNameEs' => $S['voice_name_es'],
+    'voiceButton' => $S['voice_button'] === '1',
     'cheer'       => upload_url($S['cheer_clip'] ?: null, @filemtime(__DIR__ . '/' . $S['cheer_clip']) ?: null),
     'numberClips' => (object)$numberClips,
     'difficulty'  => $S['difficulty'] === 'medium' ? 'medium' : 'easy',
     'fridge'      => $S['show_fridge'] === '1',
     'autoSave'    => $S['auto_save'] === '1',
     'numbers'     => $S['numbers_on'] === '1',
+    'numberLang'  => $S['number_lang'] === 'es' ? 'es' : 'en',
+    'langSwitch'  => $S['lang_switch'] === '1',
     'numberMax'   => in_array((int)$S['number_max'], [10, 20, 50, 100], true) ? (int)$S['number_max'] : 100,
     'letters'     => $letters,
 ];
@@ -83,13 +87,20 @@ header('Cache-Control: no-cache');
           <button data-set="abc" class="set-btn" aria-label="Letters">ABC</button>
           <button data-set="123" class="set-btn" aria-label="Numbers">123</button>
         </div>
+        <div id="langSwitch" class="set-switch lang-switch hidden" role="group" aria-label="English or Spanish">
+          <button data-lang="en" class="set-btn lang-btn" aria-label="English">🇺🇸</button>
+          <button data-lang="es" class="set-btn lang-btn" aria-label="Español">🇪🇸</button>
+        </div>
         <button id="caseBtnHome" class="pill-btn case-btn" aria-label="Big or little letters">Aa</button>
+        <button id="voiceBtn" class="round-btn voice-btn hidden" aria-label="Change the voice">🗣️</button>
         <button id="fridgeBtnHome" class="round-btn fridge-btn" aria-label="Fridge">🧲</button>
         <button class="round-btn fs-btn" aria-label="Full screen">⛶</button>
       </div>
     </header>
     <div id="grid" class="grid"></div>
   </section>
+
+  <div id="voiceToast" class="voice-toast" aria-live="polite"></div>
 
   <!-- Board: trace or draw one letter -->
   <section id="board" class="screen">
